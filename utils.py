@@ -12,12 +12,13 @@ import matplotlib.pyplot as plt
 # --------------------------------------------- #
 
 class ImagePaths(Dataset):
-    def __init__(self, path, size=None):
+    def __init__(self, paths, size=None):
         self.size = size
-
-        self.images = [os.path.join(path, file) for file in os.listdir(path)]
+        self.images=[]
+        for path in paths:
+            self.images.extend([os.path.join(path, file) for file in os.listdir(path)])
         self._length = len(self.images)
-
+        print(self._length)
         self.rescaler = albumentations.SmallestMaxSize(max_size=self.size)
         self.cropper = albumentations.CenterCrop(height=self.size, width=self.size)
         self.preprocessor = albumentations.Compose([self.rescaler, self.cropper])
