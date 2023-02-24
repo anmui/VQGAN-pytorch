@@ -17,7 +17,9 @@ class VQGAN(nn.Module):
     def forward(self, imgs):
         encoded_images = self.encoder(imgs)
         quant_conv_encoded_images = self.quant_conv(encoded_images)
+        #print(quant_conv_encoded_images.shape)
         codebook_mapping, codebook_indices, q_loss = self.codebook(quant_conv_encoded_images)
+        #print(codebook_mapping.shape)
         post_quant_conv_mapping = self.post_quant_conv(codebook_mapping)
         decoded_images = self.decoder(post_quant_conv_mapping)
 

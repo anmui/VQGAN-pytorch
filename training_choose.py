@@ -10,12 +10,17 @@ from lpips import LPIPS
 from vqgan import VQGAN
 from utils import load_data, weights_init
 from choosenet import Choose
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
 class TrainChoose:
     def __init__(self, args):
         self.model = Choose(args).to(device=args.device)
-        self.opt_ch = self.configure_optimizers(args)
+
         self.prepare_training()
+        self.discriminator = Discriminator(args).to(device=args.device)
+        self.discriminator.apply(weights_init)
+        self.opt_ch, self.opt_disc = self.configure_optimizers(args)
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.train(args)
     def configure_optimizers(self, args):
@@ -26,8 +31,9 @@ class TrainChoose:
             list(self.model.quant_conv.parameters()) ,
             lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
         )
-
-        return opt_ch
+        opt_disc = torch.optim.Adam(self.discriminator.parameters(),
+                                    lr=lr, eps=1e-08, betas=(args.beta1, args.beta2))
+        return opt_ch,opt_disc
 
     @staticmethod
     def prepare_training():
@@ -41,14 +47,27 @@ class TrainChoose:
                 for i, imgs in zip(pbar, train_dataset):
                     imgs = imgs.to(device=args.device)
                     decoded_images, _, q_loss = self.model(imgs)
+                    rec_loss = torch.abs(imgs - decoded_images)
+                    disc_real = self.discriminator(imgs)
+                    disc_fake = self.discriminator(decoded_images)
+                    g_loss = -torch.mean(disc_fake)
                     perceptual_loss = self.perceptual_loss(imgs, decoded_images)
-                    choose_loss=q_loss+perceptual_loss
+                    perceptual_rec_loss = args.perceptual_loss_factor * perceptual_loss+ args.rec_loss_factor * rec_loss
+                    perceptual_rec_loss = perceptual_rec_loss.mean()
+                    choose_loss=0.001*(q_loss+perceptual_rec_loss+g_loss)
+
+                    d_loss_real = torch.mean(F.relu(1. - disc_real))
+                    d_loss_fake = torch.mean(F.relu(1. + disc_fake))
+                    gan_loss = (d_loss_real + d_loss_fake)
+
 
                     self.opt_ch.zero_grad()
                     choose_loss.backward(retain_graph=True)
+                    self.opt_disc.zero_grad()
+                    gan_loss.backward()
 
                     self.opt_ch.step()
-
+                    self.opt_disc.step()
                     pbar.set_postfix(Ch_Loss=np.round(choose_loss.cpu().detach().numpy().item(), 5))
                     pbar.update(0)
             sampled_imgs = self.model.log_images(imgs[0][None])
@@ -61,11 +80,10 @@ if __name__ == '__main__':
     parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z (default: 256)')
     parser.add_argument('--image-size', type=int, default=256, help='Image height and width (default: 256)')
     parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors (default: 256)')
-    parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
-    parser.add_argument('--batch-size', type=int, default=6, help='Input batch size for training (default: 6)')
+    parser.add_argument('--batch-size', type=int, default=2, help='Input batch size for training (default: 6)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
@@ -74,9 +92,11 @@ if __name__ == '__main__':
     parser.add_argument('--disc-factor', type=float, default=1., help='')
     parser.add_argument('--rec-loss-factor', type=float, default=1., help='Weighting factor for reconstruction loss.')
     parser.add_argument('--perceptual-loss-factor', type=float, default=1., help='Weighting factor for perceptual loss.')
+    parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
 
     args = parser.parse_args()
-    args.dataset_path = r"C:\Users\dome\datasets\flowers"
+    args.dataset_path = [r"/media/lab/sdb/zzc/A"]
+    args.checkpoint_path = r"./checkpoints/vqgan_epoch_99.pt"
 
     train_choose = TrainChoose(args)
 
