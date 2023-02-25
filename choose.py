@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from helper import ResidualBlock, NonLocalBlock, DownSampleBlock, UpSampleBlock, GroupNorm, Swish
 #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
+
 class ChooseNet(nn.Module):
     def __init__(self, args):
         super(ChooseNet, self).__init__()

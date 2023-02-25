@@ -5,15 +5,17 @@ from torch import nn
 from transformer_nonorm_flx import Transformer
 from util.misc import nested_tensor_from_tensor_list, NestedTensor
 from vqgan import VQGAN
-
-
-class Transformer(nn.Module):
+from decoder import Decoder
+from torchvision.models._utils import IntermediateLayerGetter
+from position_encoding import build_position_encoding_ours
+class Transformerr(nn.Module):
     def __init__(self,args):
         super().__init__()
-        self.vqgan_t,self.vqgan_s = self.load_vqgan(args)
-
+        #self.vqgan_t,self.vqgan_s = self.load_vqgan(args)
+        self.vggan_t=VQGAN(args).to(device=args.device)
+        self.vggan_s=VQGAN(args).to(device=args.device)
         self.transformer=Transformer(
-            d_model=args.hidden_dim,
+            d_model=args.latent_dim,
             dropout=args.dropout,
             nhead=args.nheads,
             dim_feedforward=args.dim_feedforward,
@@ -25,22 +27,25 @@ class Transformer(nn.Module):
             dnorm=args.dnorm,
         )
         hidden_dim = self.transformer.d_model
-        self.output_proj = nn.Conv2d(hidden_dim, self.backbone_content.num_channels, kernel_size=1)
-
-        tail_layers = []
-        res_block = ResBlock
-        for ri in range(self.backbone_content.reduce_times):
-            times = 2 ** ri
-            content_c = self.backbone_content.num_channels
-            out_c = 3 if ri == self.backbone_content.reduce_times - 1 else int(content_c / (times * 2))
-            tail_layers.extend([
-                res_block(int(content_c / times), int(content_c / (times * 2))),
-                nn.Upsample(scale_factor=2, mode='bilinear'),
-                nn.ReflectionPad2d(1),
-                nn.Conv2d(int(content_c / times), out_c,
-                          kernel_size=3, stride=1, padding=0),
-            ])
-        self.tail = nn.Sequential(*tail_layers)
+        self.output_proj = nn.Conv2d(hidden_dim, args.latent_dim, kernel_size=1)
+        self.position_embedding = build_position_encoding_ours(args)
+        # tail_layers = []
+        # res_block = ResBlock
+        # for ri in range(self.backbone_content.reduce_times):
+        #     times = 2 ** ri
+        #     content_c = self.backbone_content.num_channels
+        #     out_c = 3 if ri == self.backbone_content.reduce_times - 1 else int(content_c / (times * 2))
+        #     tail_layers.extend([
+        #         res_block(int(content_c / times), int(content_c / (times * 2))),
+        #         nn.Upsample(scale_factor=2, mode='bilinear'),
+        #         nn.ReflectionPad2d(1),
+        #         nn.Conv2d(int(content_c / times), out_c,
+        #                   kernel_size=3, stride=1, padding=0),
+        #     ])
+        self.tail = Decoder(args).to(device=args.device)
+        self.input_proj_c = nn.Conv2d(args.latent_dim, hidden_dim, kernel_size=1)
+        self.input_proj_s = nn.Conv2d(args.latent_dim, hidden_dim, kernel_size=1)
+        self.device=args.device
 
     @staticmethod
     def load_vqgan(args):
@@ -52,19 +57,27 @@ class Transformer(nn.Module):
         model_style = model_style.eval()
         return model_true,model_style
     def forward(self,simg,timg):
+
         encoded_image_s = self.vqgan_s.encoder(simg)
         encoded_image_t=self.vqgan_t.encoder(timg)
         quant_conv_encoded_images_s = self.vqgan_s.quant_conv(encoded_image_s)
         quant_conv_encoded_images_t = self.vqgan_t.quant_conv(encoded_image_t)
         codebook_mapping_s, codebook_indices_s, q_loss_s = self.vqgan_s.codebook(quant_conv_encoded_images_s)
-        codebook_mapping_s, codebook_indices_t, q_loss_t = self.vqgan_t.codebook(quant_conv_encoded_images_t)
+        codebook_mapping_t, codebook_indices_t, q_loss_t = self.vqgan_t.codebook(quant_conv_encoded_images_t)
+        codebook_mapping_s=self.vqgan_s.post_quant_conv(codebook_mapping_s)
+        codebook_mapping_t = self.vqgan_t.post_quant_conv(codebook_mapping_t)
+        #print(codebook_mapping_s.shape)
+        b, c, h, w = codebook_mapping_s.shape
 
+        dtype = codebook_mapping_s.dtype
+        device = codebook_mapping_s.device
 
-        if isinstance(codebook_mapping_s, (list, torch.Tensor)):
-            samples = nested_tensor_from_tensor_list(codebook_mapping_s)
-            style_images = nested_tensor_from_tensor_list(codebook_mapping_s)
-        src_features, mask = samples.decompose()
-        style_features, style_mask = style_images.decompose()
+        mask = torch.zeros((b, h, w), dtype=torch.bool, device=device)
+        src_features=codebook_mapping_t
+        style_features = codebook_mapping_s
+        style_mask= torch.zeros((b, h, w), dtype=torch.bool, device=device)
+        #print(style_mask.shape)
+        #print(style_mask)
         B, C, f_h, f_w = src_features.shape
 
         pos = self.position_embedding(NestedTensor(src_features, mask)).to(src_features.dtype)
@@ -81,6 +94,7 @@ class Transformer(nn.Module):
         res = self.output_proj(hs)  # [B,256*k*k,h*w=L]   L=[(H − k + 2P )/S+1] * [(W − k + 2P )/S+1]  k=16,P=2,S=32
 
         res = self.tail(res)  # [B,3,H,W]
+        #print(res.shape)
 
         return res
 

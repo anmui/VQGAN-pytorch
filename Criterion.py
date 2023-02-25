@@ -301,12 +301,12 @@ class SetCriterion(nn.Module):
         #         content_middle_features = self.vgg_encoder(targets_content.tensors, output_last_feature=False)
         #         loss_c = self.loss_content(output_middle_features, content_middle_features)
 
-        content_features = self.vgg_encoder(targets_content.tensors, output_last_feature=True)
+        content_features = self.vgg_encoder(targets_content, output_last_feature=True)
         output_features = self.vgg_encoder(outputs, output_last_feature=True)
         loss_c = self.loss_content_last(output_features, content_features)
 
         # adain loss:
-        style_middle_features = self.vgg_encoder(targets_style.tensors, output_last_feature=False)
+        style_middle_features = self.vgg_encoder(targets_style, output_last_feature=False)
         output_middle_features = self.vgg_encoder(outputs, output_last_feature=False)
         loss_s = self.loss_style_adain(output_middle_features, style_middle_features)
 
