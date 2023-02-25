@@ -23,10 +23,13 @@ class TrainT:
                        'loss_tv': args.tv_loss_coef}
         losses = ['content', 'style', 'tv']
         self.transformer = Transformerr(args).to(device=args.device)
+
         self.criterion = SetCriterion(1, weight_dict=weight_dict,
                                  eos_coef=args.eos_coef, losses=losses)
         self.criterion.to(device=args.device)
-        self.opt_t = self.configure_optimizers(args)
+        self.opt_t,self.opt_disc = self.configure_optimizers(args)
+        self.discriminator = Discriminator(args).to(device=args.device)
+        self.discriminator.apply(weights_init)
         self.prepare_training()
 
         self.train(args)
@@ -36,12 +39,21 @@ class TrainT:
         opt_t = torch.optim.Adam(
             list(self.transformer.transformer.parameters()) +
             list(self.transformer.tail.parameters()) +
-            list(self.transformer.output_proj.parameters()) ,
-            lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
+            list(self.transformer.output_proj.parameters()) +
+            list(self.transformer.vggan_t.encoder.parameters()) +
+            list(self.transformer.vggan_s.encoder.parameters()) +
+            list(self.transformer.vggan_t.codebook.parameters()) +
+            list(self.transformer.vggan_s.codebook.parameters()) +
+            list(self.transformer.vggan_t.quant_conv.parameters()) +
+            list(self.transformer.vggan_s.quant_conv.parameters()) +
+            list(self.transformer.vggan_t.post_quant_conv.parameters()) +
+            list(self.transformer.vggan_s.post_quant_conv.parameters()) ,
+        lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
         )
 
-
-        return opt_t
+        opt_disc = torch.optim.Adam(self.discriminator.parameters(),
+                                    lr=lr, eps=1e-08, betas=(args.beta1, args.beta2))
+        return opt_t,opt_disc
 
     @staticmethod
     def prepare_training():
@@ -56,7 +68,11 @@ class TrainT:
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
                     outputs = self.transformer(samples, style_images)
-
+                    disc_real = self.discriminator(style_images)
+                    disc_fake = self.discriminator(outputs)
+                    d_loss_real = torch.mean(F.relu(1. - disc_real))
+                    d_loss_fake = torch.mean(F.relu(1. + disc_fake))
+                    gan_loss = (d_loss_real + d_loss_fake)
                     loss_dict = self.criterion(outputs, samples, style_images)
                     weight_dict = self.criterion.weight_dict
                     losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
@@ -71,8 +87,11 @@ class TrainT:
 
                     loss_value = losses_reduced_scaled.item()
                     self.opt_t.zero_grad()
-                    losses.backward()
+                    losses.backward(retain_graph=True)
+                    self.opt_disc.zero_grad()
+                    gan_loss.backward()
                     self.opt_t.step()
+                    self.opt_disc.step()
 
                     if i % 10 == 0:
                         with torch.no_grad():
