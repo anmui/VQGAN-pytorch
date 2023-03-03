@@ -1,5 +1,7 @@
 import os
 import argparse
+
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -8,6 +10,7 @@ from torchvision import utils as vutils
 import util
 import utils
 from Criterion import SetCriterion
+from datasets import build_dataset
 from discriminator import Discriminator
 from lpips import LPIPS
 from transformerr import Transformerr
@@ -64,9 +67,19 @@ class TrainT:
 
     def train(self, args):
         train_loader_s,train_loader_t = utils.load_data_2(args)
+        dataset_train = build_dataset(image_set='train', args=args)
+        dataset_val = build_dataset(image_set='val', args=args)
+        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        batch_sampler_train = torch.utils.data.BatchSampler(
+            sampler_train, args.batch_size, drop_last=True)
+        data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
+                                       collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
+        data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
+                                     drop_last=False, collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
         for epoch in range(args.epochs):
-            with tqdm(range(len(train_loader_t))) as pbar:
-                for i, samples,style_images in zip(pbar, train_loader_t,train_loader_s):
+            with tqdm(range(len(data_loader_train))) as pbar:
+                for i, samples,style_images in zip(pbar, data_loader_train):
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
                     outputs = self.transformer(samples, style_images)
