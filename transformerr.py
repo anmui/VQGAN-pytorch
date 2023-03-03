@@ -46,16 +46,6 @@ class Transformerr(nn.Module):
         self.input_proj_c = nn.Conv2d(args.latent_dim, hidden_dim, kernel_size=1)
         self.input_proj_s = nn.Conv2d(args.latent_dim, hidden_dim, kernel_size=1)
         self.device=args.device
-
-    @staticmethod
-    def load_vqgan(args):
-        model_true = VQGAN(args)
-        model_true.load_checkpoint(args.checkpoint_path_ture)
-        model_true = model_true.eval()
-        model_style = VQGAN(args)
-        model_style.load_checkpoint(args.checkpoint_path_style)
-        model_style = model_style.eval()
-        return model_true,model_style
     def forward(self,simg,timg):
 
         encoded_image_s = self.vqgan_s.encoder(simg)
@@ -96,6 +86,44 @@ class Transformerr(nn.Module):
 
         res = self.tail(res)  # [B,3,H,W]
         #print(res.shape)
+
+        return res
+    def load_checkpoint(self, path):
+        self.load_state_dict(torch.load(path))
+
+    @torch.no_grad()
+    def log_images(self,simg,timg):
+        encoded_image_s = self.vqgan_s.encoder(simg)
+        encoded_image_t = self.vqgan_t.encoder(timg)
+        quant_conv_encoded_images_s = self.vqgan_s.quant_conv(encoded_image_s)
+        quant_conv_encoded_images_t = self.vqgan_t.quant_conv(encoded_image_t)
+        codebook_mapping_s, codebook_indices_s, q_loss_s = self.vqgan_s.codebook(quant_conv_encoded_images_s)
+        codebook_mapping_s = self.vqgan_s.post_quant_conv(codebook_mapping_s)
+        codebook_mapping_t = quant_conv_encoded_images_t
+        b, c, h, w = codebook_mapping_s.shape
+        device = codebook_mapping_s.device
+
+        mask = torch.zeros((b, h, w), dtype=torch.bool, device=device)
+        src_features = codebook_mapping_t
+        style_features = codebook_mapping_s
+        style_mask = torch.zeros((b, h, w), dtype=torch.bool, device=device)
+        B, C, f_h, f_w = src_features.shape
+
+        pos = self.position_embedding(NestedTensor(src_features, mask)).to(src_features.dtype)
+        style_pos = self.position_embedding(NestedTensor(style_features, style_mask)).to(style_features.dtype)
+
+        assert mask is not None
+
+        hs, mem = self.transformer(self.input_proj_s(style_features), style_mask, self.input_proj_c(src_features), pos,
+                                   style_pos)  # hs: [6, 2, 100,
+
+        B, h_w, C = hs[-1].shape  # [B, h*w=L, C]
+        hs = hs[-1].permute(0, 2, 1).reshape(B, C, f_h, f_w)  # [B,C,h,w]
+
+        res = self.output_proj(hs)  # [B,256*k*k,h*w=L]   L=[(H − k + 2P )/S+1] * [(W − k + 2P )/S+1]  k=16,P=2,S=32
+
+        res = self.tail(res)  # [B,3,H,W]
+        # print(res.shape)
 
         return res
 

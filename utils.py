@@ -5,6 +5,7 @@ import torch.nn as nn
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
+from torch.utils.data import random_split
 
 
 # --------------------------------------------- #
@@ -14,7 +15,7 @@ import matplotlib.pyplot as plt
 class ImagePaths(Dataset):
     def __init__(self, paths, size=None):
         self.size = size
-        self.images=[]
+        self.images = []
         for path in paths:
             self.images.extend([os.path.join(path, file) for file in os.listdir(path)])
         self._length = len(self.images)
@@ -46,13 +47,19 @@ def load_data(args):
     train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False)
     return train_loader
 
+
 def load_data_2(args):
     train_data_s = ImagePaths(args.dataset_path_s, size=256)
     train_loader_s = DataLoader(train_data_s, batch_size=args.batch_size, shuffle=False)
     train_data_t = ImagePaths(args.dataset_path_t, size=256)
     train_loader_t = DataLoader(train_data_t, batch_size=args.batch_size, shuffle=False)
-
-    return train_loader_s,train_loader_t
+    train_dataset_s, test_dataset_s = random_split(train_loader_s.dataset, [int(len(train_loader_s) * 0.8),
+                                                                            len(train_loader_s) - int(
+                                                                                len(train_loader_s) * 0.8)])
+    train_dataset_t, test_dataset_t = random_split(train_loader_t.dataset, [int(len(train_loader_t) * 0.8),
+                                                                            len(train_loader_t) - int(
+                                                                                len(train_loader_t) * 0.8)])
+    return train_loader_s, train_loader_t, test_dataset_s, test_dataset_t
 
 
 # --------------------------------------------- #

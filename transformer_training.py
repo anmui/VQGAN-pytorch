@@ -13,6 +13,7 @@ from Criterion import SetCriterion
 from datasets import build_dataset
 from discriminator import Discriminator
 from lpips import LPIPS
+from test_image import getTest
 from transformerr import Transformerr
 from vqgan import VQGAN
 from utils import load_data, weights_init
@@ -66,20 +67,20 @@ class TrainT:
         os.makedirs("checkpoints", exist_ok=True)
 
     def train(self, args):
-        train_loader_s,train_loader_t = utils.load_data_2(args)
-        dataset_train = build_dataset(image_set='train', args=args)
-        dataset_val = build_dataset(image_set='val', args=args)
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-        batch_sampler_train = torch.utils.data.BatchSampler(
-            sampler_train, args.batch_size, drop_last=True)
-        data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
-                                       collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
-        data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
-                                     drop_last=False, collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
+        train_loader_s, train_loader_t, test_dataset_s, test_dataset_t = utils.load_data_2(args)
+        # dataset_train = build_dataset(image_set='train', args=args)
+        # dataset_val = build_dataset(image_set='val', args=args)
+        # sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        # sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        # batch_sampler_train = torch.utils.data.BatchSampler(
+        #     sampler_train, args.batch_size, drop_last=True)
+        # data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
+        #                                collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
+        # data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
+        #                              drop_last=False, collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
         for epoch in range(args.epochs):
-            with tqdm(range(len(data_loader_train))) as pbar:
-                for i, samples,style_images in zip(pbar, data_loader_train):
+            with tqdm(range(len(train_loader_s))) as pbar:
+                for i, samples,style_images in zip(pbar, train_loader_t,train_loader_s):
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
                     outputs = self.transformer(samples, style_images)
@@ -123,6 +124,7 @@ class TrainT:
                     )
                     pbar.update(0)
                 torch.save(self.transformer.state_dict(), os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
+        getTest(test_dataset_s,test_dataset_t,args)
 
 
 
@@ -134,9 +136,9 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
-    parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
+    parser.add_argument('--device', type=str, default="cuda:1", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -177,8 +179,8 @@ if __name__ == '__main__':
                         help="")
     # * Loss coefficients
 
-    parser.add_argument('--content_loss_coef', default=23.0, type=float)
-    parser.add_argument('--style_loss_coef', default=1.0, type=float)
+    parser.add_argument('--content_loss_coef', default=1.0, type=float)
+    parser.add_argument('--style_loss_coef', default=1e4, type=float)
     parser.add_argument('--tv_loss_coef', default=0.0001, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
