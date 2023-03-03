@@ -12,8 +12,8 @@ class Transformerr(nn.Module):
     def __init__(self,args):
         super().__init__()
         #self.vqgan_t,self.vqgan_s = self.load_vqgan(args)
-        self.vggan_t=VQGAN(args).to(device=args.device)
-        self.vggan_s=VQGAN(args).to(device=args.device)
+        self.vqgan_t=VQGAN(args).to(device=args.device)
+        self.vqgan_s=VQGAN(args).to(device=args.device)
         self.transformer=Transformer(
             d_model=args.latent_dim,
             dropout=args.dropout,
@@ -63,12 +63,13 @@ class Transformerr(nn.Module):
         quant_conv_encoded_images_s = self.vqgan_s.quant_conv(encoded_image_s)
         quant_conv_encoded_images_t = self.vqgan_t.quant_conv(encoded_image_t)
         codebook_mapping_s, codebook_indices_s, q_loss_s = self.vqgan_s.codebook(quant_conv_encoded_images_s)
-        codebook_mapping_t, codebook_indices_t, q_loss_t = self.vqgan_t.codebook(quant_conv_encoded_images_t)
+        #codebook_mapping_t, codebook_indices_t, q_loss_t = self.vqgan_t.codebook(quant_conv_encoded_images_t)
         codebook_mapping_s=self.vqgan_s.post_quant_conv(codebook_mapping_s)
-        codebook_mapping_t = self.vqgan_t.post_quant_conv(codebook_mapping_t)
+        #codebook_mapping_t = self.vqgan_t.post_quant_conv(codebook_mapping_t)
+        codebook_mapping_t=quant_conv_encoded_images_t
         #print(codebook_mapping_s.shape)
         b, c, h, w = codebook_mapping_s.shape
-
+        #print(encoded_image_s.shape)
         dtype = codebook_mapping_s.dtype
         device = codebook_mapping_s.device
 

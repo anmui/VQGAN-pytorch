@@ -265,6 +265,8 @@ class TransformerEncoderLayer(nn.Module):
             self.norm2 = nn.LayerNorm(d_model)
 
     def with_pos_embed(self, tensor, pos: Optional[Tensor]):
+        #print(tensor.shape)
+        #print(pos.shape)
         return tensor if pos is None else tensor + pos
 
     def forward_post(self,

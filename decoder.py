@@ -23,7 +23,7 @@ class Decoder(nn.Module):
                 in_channels = out_channels
                 if resolution in attn_resolutions:
                     layers.append(NonLocalBlock(in_channels))
-            if i != 0:
+            if i != 0 and i!=2:
                 layers.append(UpSampleBlock(in_channels))
                 resolution *= 2
 

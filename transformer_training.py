@@ -27,30 +27,32 @@ class TrainT:
         self.criterion = SetCriterion(1, weight_dict=weight_dict,
                                  eos_coef=args.eos_coef, losses=losses)
         self.criterion.to(device=args.device)
-        self.opt_t,self.opt_disc = self.configure_optimizers(args)
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
+        self.opt_t,self.opt_disc = self.configure_optimizers(args)
+
         self.prepare_training()
 
         self.train(args)
 
     def configure_optimizers(self, args):
+
         lr = args.learning_rate
         opt_t = torch.optim.Adam(
             list(self.transformer.transformer.parameters()) +
             list(self.transformer.tail.parameters()) +
             list(self.transformer.output_proj.parameters()) +
-            list(self.transformer.vggan_t.encoder.parameters()) +
-            list(self.transformer.vggan_s.encoder.parameters()) +
-            list(self.transformer.vggan_t.codebook.parameters()) +
-            list(self.transformer.vggan_s.codebook.parameters()) +
-            list(self.transformer.vggan_t.quant_conv.parameters()) +
-            list(self.transformer.vggan_s.quant_conv.parameters()) +
-            list(self.transformer.vggan_t.post_quant_conv.parameters()) +
-            list(self.transformer.vggan_s.post_quant_conv.parameters()) ,
+            list(self.transformer.vqgan_t.encoder.parameters()) +
+            list(self.transformer.vqgan_s.encoder.parameters()) +
+            #list(self.transformer.vqgan_t.codebook.parameters()) +
+            list(self.transformer.vqgan_s.codebook.parameters()) +
+            list(self.transformer.vqgan_t.quant_conv.parameters()) +
+            list(self.transformer.vqgan_s.quant_conv.parameters()) +
+            #list(self.transformer.vqgan_t.post_quant_conv.parameters()) +
+            list(self.transformer.vqgan_s.post_quant_conv.parameters()) ,
         lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
         )
-
+        #print(self.discriminator)
         opt_disc = torch.optim.Adam(self.discriminator.parameters(),
                                     lr=lr, eps=1e-08, betas=(args.beta1, args.beta2))
         return opt_t,opt_disc
@@ -68,14 +70,19 @@ class TrainT:
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
                     outputs = self.transformer(samples, style_images)
+                    #print(samples.shape)
+                    #print(outputs.shape)
                     disc_real = self.discriminator(style_images)
                     disc_fake = self.discriminator(outputs)
                     d_loss_real = torch.mean(F.relu(1. - disc_real))
                     d_loss_fake = torch.mean(F.relu(1. + disc_fake))
                     gan_loss = (d_loss_real + d_loss_fake)
+                    #print(outputs.shape)
+                    #print(samples.shape)
                     loss_dict = self.criterion(outputs, samples, style_images)
                     weight_dict = self.criterion.weight_dict
-                    losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
+                    g_loss = -torch.mean(disc_fake)
+                    losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)+g_loss
 
                     # reduce losses over all GPUs for logging purposes
                     loss_dict_reduced = util.misc.reduce_dict(loss_dict)
@@ -93,10 +100,10 @@ class TrainT:
                     self.opt_t.step()
                     self.opt_disc.step()
 
-                    if i % 10 == 0:
+                    if i % 10 == 0 and epoch % 10 == 0:
                         with torch.no_grad():
                             real_fake_images = torch.cat((samples[:4].add(1).mul(0.5)[:4], outputs.add(1).mul(0.5)[:4],style_images.add(1).mul(0.5)[:4]))
-                            vutils.save_image(real_fake_images, os.path.join("results", f"1_{epoch}_{i}_fix.jpg"), nrow=4)
+                            vutils.save_image(real_fake_images, os.path.join("results", f"1_{epoch}_{i}.jpg"), nrow=4)
 
                     pbar.set_postfix(
                         t_Loss=np.round(loss_value, 5)
@@ -105,17 +112,18 @@ class TrainT:
                 torch.save(self.transformer.state_dict(), os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
 
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
     parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z (default: 256)')
-    parser.add_argument('--image-size', type=int, default=256, help='Image height and width (default: 256)')
+    parser.add_argument('--image-size', type=int, default=512, help='Image height and width (default: 256)')
     parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors (default: 256)')
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -156,9 +164,9 @@ if __name__ == '__main__':
                         help="")
     # * Loss coefficients
 
-    parser.add_argument('--content_loss_coef', default=1.0, type=float)
-    parser.add_argument('--style_loss_coef', default=1e4, type=float)
-    parser.add_argument('--tv_loss_coef', default=0, type=float)
+    parser.add_argument('--content_loss_coef', default=23.0, type=float)
+    parser.add_argument('--style_loss_coef', default=1.0, type=float)
+    parser.add_argument('--tv_loss_coef', default=0.0001, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
     parser.add_argument('--bbox_loss_coef', default=5, type=float)

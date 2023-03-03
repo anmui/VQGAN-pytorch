@@ -18,7 +18,7 @@ class Encoder(nn.Module):
                 in_channels = out_channels
                 if resolution in attn_resolutions:
                     layers.append(NonLocalBlock(in_channels))
-            if i != len(channels)-2:
+            if i != len(channels)-2 and i!=len(channels) -4:
                 layers.append(DownSampleBlock(channels[i+1]))
                 resolution //= 2
         layers.append(ResidualBlock(channels[-1], channels[-1]))
