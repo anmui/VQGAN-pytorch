@@ -50,18 +50,22 @@ def load_data(args):
 
 def load_data_2(args):
     train_data_s = ImagePaths(args.dataset_path_s, size=256)
-    train_loader_s = DataLoader(train_data_s, batch_size=args.batch_size, shuffle=False)
+    #train_loader_s = DataLoader(train_data_s, batch_size=args.batch_size, shuffle=False)
     train_data_t = ImagePaths(args.dataset_path_t, size=256)
-    train_loader_t = DataLoader(train_data_t, batch_size=args.batch_size, shuffle=False)
-    train_dataset_s, _ = random_split(train_loader_s.dataset, [12000,len(train_loader_s) - 12000])
-    train_dataset_t, _ = random_split(train_loader_t.dataset, [12000,len(train_loader_t) - 12000])
-    train_dataset_s, test_dataset_s = random_split(train_loader_s.dataset, [int(len(train_loader_s) * 0.8),
-                                                                            len(train_loader_s) - int(
-                                                                                len(train_loader_s) * 0.8)])
-    train_dataset_t, test_dataset_t = random_split(train_loader_t.dataset, [int(len(train_loader_t) * 0.8),
-                                                                            len(train_loader_t) - int(
-                                                                                len(train_loader_t) * 0.8)])
-    return train_loader_s, train_loader_t, test_dataset_s, test_dataset_t
+    #train_loader_t = DataLoader(train_data_t, batch_size=args.batch_size, shuffle=False)
+    train_dataset_s, _ = random_split(train_data_s, [12000,len(train_data_s) - 12000])
+    train_dataset_t, _ = random_split(train_data_t, [12000,len(train_data_t) - 12000])
+    train_dataset_s, test_dataset_s = random_split(train_dataset_s, [int(len(train_dataset_s) * 0.8),
+                                                                            len(train_dataset_s) - int(
+                                                                                len(train_dataset_s) * 0.8)])
+    train_dataset_t, test_dataset_t = random_split(train_dataset_t, [int(len(train_dataset_t) * 0.8),
+                                                                            len(train_dataset_t) - int(
+                                                                                len(train_dataset_t) * 0.8)])
+    train_dataset_s = DataLoader(train_dataset_s, batch_size=args.batch_size, shuffle=True)
+    test_dataset_s = DataLoader(test_dataset_s, batch_size=args.batch_size, shuffle=True)
+    train_dataset_t = DataLoader(train_dataset_t, batch_size=args.batch_size, shuffle=True)
+    test_dataset_t = DataLoader(test_dataset_t, batch_size=args.batch_size, shuffle=True)
+    return train_dataset_s, train_dataset_t, test_dataset_s, test_dataset_t
 
 
 # --------------------------------------------- #

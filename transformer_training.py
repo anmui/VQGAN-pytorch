@@ -114,7 +114,7 @@ class TrainT:
                     self.opt_t.step()
                     self.opt_disc.step()
 
-                    if i % 10 == 0 and epoch % 10 == 0:
+                    if i % 500 == 0 and epoch % 10 == 0:
                         with torch.no_grad():
                             real_fake_images = torch.cat((samples[:4].add(1).mul(0.5)[:4], outputs.add(1).mul(0.5)[:4],style_images.add(1).mul(0.5)[:4]))
                             vutils.save_image(real_fake_images, os.path.join("results", f"1_{epoch}_{i}.jpg"), nrow=4)
@@ -180,7 +180,7 @@ if __name__ == '__main__':
     # * Loss coefficients
 
     parser.add_argument('--content_loss_coef', default=1.0, type=float)
-    parser.add_argument('--style_loss_coef', default=1e4, type=float)
+    parser.add_argument('--style_loss_coef', default=10.0, type=float)
     parser.add_argument('--tv_loss_coef', default=0.0001, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
@@ -192,10 +192,13 @@ if __name__ == '__main__':
                         help="Type of positional embedding to use on top of the image features")
 
     args = parser.parse_args()
-    args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
-    args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
-    args.checkpoint_path_style=r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqgan_epoch_99.pt"
-    args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_99.pt"
+    # args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
+    # args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
+    args.dataset_path_s = [r"/media/lab/sdb/zzc/input/style"]
+    args.dataset_path_t = [r"/media/lab/sdb/zzc/input/content"]
+
+    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_99.pt"
+    # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_99.pt"
     train_t = TrainT(args)
 
 

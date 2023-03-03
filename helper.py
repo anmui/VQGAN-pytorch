@@ -47,6 +47,8 @@ class UpSampleBlock(nn.Module):
         self.conv = nn.Conv2d(channels, channels, 3, 1, 1)
 
     def forward(self, x):
+        if hasattr(torch.cuda, 'empty_cache'):
+            torch.cuda.empty_cache()
         x = F.interpolate(x, scale_factor=2.0)
         return self.conv(x)
 
