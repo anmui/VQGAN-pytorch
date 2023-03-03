@@ -53,6 +53,8 @@ def load_data_2(args):
     train_loader_s = DataLoader(train_data_s, batch_size=args.batch_size, shuffle=False)
     train_data_t = ImagePaths(args.dataset_path_t, size=256)
     train_loader_t = DataLoader(train_data_t, batch_size=args.batch_size, shuffle=False)
+    train_dataset_s, _ = random_split(train_loader_s.dataset, [12000,len(train_loader_s) - 12000])
+    train_dataset_t, _ = random_split(train_loader_t.dataset, [12000,len(train_loader_t) - 12000])
     train_dataset_s, test_dataset_s = random_split(train_loader_s.dataset, [int(len(train_loader_s) * 0.8),
                                                                             len(train_loader_s) - int(
                                                                                 len(train_loader_s) * 0.8)])
