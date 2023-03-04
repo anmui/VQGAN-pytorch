@@ -454,7 +454,7 @@ class StripAttentionBlock(nn.Module):
       proj_drop=drop
     )
 
-    self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+    #self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
     self.norm2 = norm_layer(d_model)
     mlp_hidden_dim = int(d_model * mlp_ratio)
     self.mlp = Mlp(d_model, hidden_features=mlp_hidden_dim, out_features=d_model, act_layer=act_layer, drop=drop)

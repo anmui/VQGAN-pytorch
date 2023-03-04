@@ -144,6 +144,7 @@ class Transformer(nn.Module):
         tgt = src
         #         print(style_src.shape, mask.shape, pos_embed.shape)
         memory = self.encoder(style_src, src_key_padding_mask=mask, pos=pos_embed)
+        #print(memory.shape)
         hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
                           pos=pos_embed, query_pos=query_pos_embed)
         #         print("hs:",hs.shape) #torch.Size([layer_num, h*w, B, C])
@@ -255,7 +256,7 @@ class TransformerEncoderLayer(nn.Module):
                  activation="relu", normalize_before=False, enorm=False, strip_width=4, qkv_bias=True, drop=0.,
                  attn_drop=0.):
         super().__init__()
-        # self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
         self.attn1 = StripAttention(
             d_model=d_model,
             nhead=nhead,
@@ -306,30 +307,32 @@ class TransformerEncoderLayer(nn.Module):
                      src_mask: Optional[Tensor] = None,
                      src_key_padding_mask: Optional[Tensor] = None,
                      pos: Optional[Tensor] = None):
-        # q = k = self.with_pos_embed(src, pos)
-        # #         print("q.shape, k.shape, src.shape:",q.shape, k.shape, src.shape)
+        q = k = self.with_pos_embed(src, pos)
+        #print("q.shape, k.shape, src.shape:",q.shape, k.shape, src.shape)
+        # print(src.shape)
         #
         # src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
         #                       key_padding_mask=src_key_padding_mask)[0]
-        #         print(self.self_attn(q, k, value=src, attn_mask=src_mask,
-        #                               key_padding_mask=src_key_padding_mask)[1].shape)
-        #         assert(False)
+        # # print(self.self_attn(q, k, value=src, attn_mask=src_mask,
+        # #                       key_padding_mask=src_key_padding_mask)[1].shape)
+        # # assert(False)
         x=src
-        arbitrary_input = x[1]
-        if arbitrary_input:
-            H, W = x[2]
-            # x, (H, W) = seq_crop(x[0], dividable_size=self.strip_width*2, input_resolution=(H, W))
-            x, (H, W), pad = seq_padding(x[0], dividable_size=self.strip_width * 2, input_resolution=(H, W),
-                                         pad_mode='constant')
-        else:
-            H, W = self.input_resolution
-            x = x[0]
+        #print(x.shape)
+        # arbitrary_input = x[1]
+        # if arbitrary_input:
+        #     H, W = x[2]
+        #     # x, (H, W) = seq_crop(x[0], dividable_size=self.strip_width*2, input_resolution=(H, W))
+        #     x, (H, W), pad = seq_padding(x[0], dividable_size=self.strip_width * 2, input_resolution=(H, W),
+        #                                  pad_mode='constant')
+        #  else:
+        H, W = 1,1
+        #x = x[0]
 
         B, L, C = x.shape
         assert L == H * W, "input feature has wrong size"
 
         shortcut = x
-        x = self.norm1(x)
+        #x = self.norm1(x)
 
         x1 = self.attn1(x, shape=(H, W))
         x2 = self.attn2(x, shape=(H, W))

@@ -18,8 +18,8 @@ from transformerr import Transformerr
 from vqgan import VQGAN
 from utils import load_data, weights_init
 from fcn import FCN
-
-
+print(torch.__version__)
+print(torch.cuda.is_available())
 
 class TrainT:
     def __init__(self, args):
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
-    parser.add_argument('--device', type=str, default="cuda:1", help='Which device the training is on')
+    parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
@@ -194,8 +194,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
     # args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
-    args.dataset_path_s = [r"/media/lab/sdb/zzc/input/style"]
-    args.dataset_path_t = [r"/media/lab/sdb/zzc/input/content"]
+    args.dataset_path_s = [r"/home/zhang/PycharmProjects/input/style"]
+    args.dataset_path_t = [r"/home/zhang/PycharmProjects/input/content"]
 
     args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_99.pt"
     # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_99.pt"
