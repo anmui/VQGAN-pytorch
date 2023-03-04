@@ -14,6 +14,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
 
+from model import to_2tuple
 from model.s2wat import StripAttention, WindowAttention_Kai, seq_padding
 
 
@@ -22,11 +23,12 @@ class Transformer(nn.Module):
     def __init__(self, d_model=512, nhead=8, num_encoder_layers=6,
                  num_decoder_layers=6, dim_feedforward=2048, dropout=0.1,
                  activation="relu", normalize_before=False,
-                 return_intermediate_dec=False, enorm=False, dnorm=False):
+                 return_intermediate_dec=False, enorm=False, dnorm=False, input_resolution=(1, 1)):
         super().__init__()
-
+        self.input_resolution = to_2tuple(input_resolution)
         encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
-                                                dropout, activation, normalize_before, enorm)
+                                                dropout, activation, normalize_before, enorm,
+                                                input_resolution=self.input_resolution)
         encoder_norm = nn.LayerNorm(d_model) if normalize_before and enorm else None
         self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
@@ -144,7 +146,7 @@ class Transformer(nn.Module):
         tgt = src
         #         print(style_src.shape, mask.shape, pos_embed.shape)
         memory = self.encoder(style_src, src_key_padding_mask=mask, pos=pos_embed)
-        #print(memory.shape)
+        # print(memory.shape)
         hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
                           pos=pos_embed, query_pos=query_pos_embed)
         #         print("hs:",hs.shape) #torch.Size([layer_num, h*w, B, C])
@@ -254,9 +256,10 @@ class TransformerEncoderLayer(nn.Module):
 
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
                  activation="relu", normalize_before=False, enorm=False, strip_width=4, qkv_bias=True, drop=0.,
-                 attn_drop=0.):
+                 attn_drop=0.,input_resolution=(1,1)):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.input_resolution = to_2tuple(input_resolution)
         self.attn1 = StripAttention(
             d_model=d_model,
             nhead=nhead,
@@ -308,7 +311,7 @@ class TransformerEncoderLayer(nn.Module):
                      src_key_padding_mask: Optional[Tensor] = None,
                      pos: Optional[Tensor] = None):
         q = k = self.with_pos_embed(src, pos)
-        #print("q.shape, k.shape, src.shape:",q.shape, k.shape, src.shape)
+        # print("q.shape, k.shape, src.shape:",q.shape, k.shape, src.shape)
         # print(src.shape)
         #
         # src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
@@ -316,8 +319,8 @@ class TransformerEncoderLayer(nn.Module):
         # # print(self.self_attn(q, k, value=src, attn_mask=src_mask,
         # #                       key_padding_mask=src_key_padding_mask)[1].shape)
         # # assert(False)
-        x=src
-        #print(x.shape)
+        x = src
+        # print(x.shape)
         # arbitrary_input = x[1]
         # if arbitrary_input:
         #     H, W = x[2]
@@ -325,14 +328,14 @@ class TransformerEncoderLayer(nn.Module):
         #     x, (H, W), pad = seq_padding(x[0], dividable_size=self.strip_width * 2, input_resolution=(H, W),
         #                                  pad_mode='constant')
         #  else:
-        H, W = 1,1
-        #x = x[0]
+        H, W = 1, 1
+        # x = x[0]
 
         B, L, C = x.shape
         assert L == H * W, "input feature has wrong size"
 
         shortcut = x
-        #x = self.norm1(x)
+        # x = self.norm1(x)
 
         x1 = self.attn1(x, shape=(H, W))
         x2 = self.attn2(x, shape=(H, W))
@@ -346,7 +349,7 @@ class TransformerEncoderLayer(nn.Module):
         attn_x = (q_x @ k_x.transpose(-1, -2)).softmax(dim=-1)
         x = attn_x @ k_x
         x = x.squeeze(dim=2)
-        src2=x
+        src2 = x
         src = src + self.dropout1(src2)
         if self.enorm:
             src = self.norm1(src)

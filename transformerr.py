@@ -2,6 +2,7 @@ import math
 import torch
 from torch import nn
 
+from model import to_2tuple
 from transformer_nonorm_flx import Transformer
 from util.misc import nested_tensor_from_tensor_list, NestedTensor
 from vqgan import VQGAN
@@ -14,6 +15,10 @@ class Transformerr(nn.Module):
         #self.vqgan_t,self.vqgan_s = self.load_vqgan(args)
         self.vqgan_t=VQGAN(args).to(device=args.device)
         self.vqgan_s=VQGAN(args).to(device=args.device)
+        self.img_size = to_2tuple(args.image_size)
+        self.patch_size = to_2tuple(args.patch_size)
+        self.patches_resolution = (self.img_size[0] // self.patch_size[0], self.img_size[1] // self.patch_size[1])
+        self.num_patches = self.patches_resolution[0] * self.patches_resolution[1]
         self.transformer=Transformer(
             d_model=args.latent_dim,
             dropout=args.dropout,
@@ -25,6 +30,7 @@ class Transformerr(nn.Module):
             return_intermediate_dec=True,
             enorm=args.enorm,
             dnorm=args.dnorm,
+            input_resolution=self.patches_resolution
         )
         hidden_dim = self.transformer.d_model
         self.output_proj = nn.Conv2d(hidden_dim, args.latent_dim, kernel_size=1)
