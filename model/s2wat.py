@@ -121,8 +121,10 @@ def window_partition(x, window_size):
   Returns:
     windows: (num_windows*B, window_size, window_size, C)
   """
+  #print(window_size)
   window_size = to_2tuple(window_size)
   B, H, W, C = x.shape
+  #print(window_size)
   n_win_H = H//window_size[0]
   n_win_W = W//window_size[1]
   if not (H % window_size[0] == 0 and W  % window_size[1] == 0):
@@ -324,6 +326,7 @@ class WindowAttention_Kai(nn.Module):
   
   def forward(self, x, shape):
     H, W = shape
+    x = x.permute(1, 0, 2)
     Bi, Ni, Ci = x.size()
     assert Ni == H * W, "Inputs with wrong size."
     x = x.reshape(Bi, H, W, Ci)
@@ -382,9 +385,11 @@ class StripAttention(nn.Module):
 
   def forward(self, x, shape):
     H, W = shape
+    x=x.permute(1,0,2)
     B, N, C = x.size()
+
     assert N == H * W, "Inputs with wrong size."
-    x = x.reshape(B, H, W, C)
+    x = x.reshape(B, int(H), int(W), C)
 
     # print(self.strip_width)
     if self.is_vertical:

@@ -67,7 +67,8 @@ class TrainT:
         os.makedirs("checkpoints", exist_ok=True)
 
     def train(self, args):
-        train_loader_s, train_loader_t, test_dataset_s, test_dataset_t = utils.load_data_2(args)
+        #train_loader_s, train_loader_t, test_dataset_s, test_dataset_t = utils.load_data_2(args)
+        train_loader_s, train_loader_t = utils.load_data_3(args)
         # dataset_train = build_dataset(image_set='train', args=args)
         # dataset_val = build_dataset(image_set='val', args=args)
         # sampler_train = torch.utils.data.RandomSampler(dataset_train)
@@ -79,7 +80,7 @@ class TrainT:
         # data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
         #                              drop_last=False, collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
         for epoch in range(args.epochs):
-            with tqdm(range(len(train_loader_s))) as pbar:
+            with tqdm(range(len(train_loader_t))) as pbar:
                 for i, samples,style_images in zip(pbar, train_loader_t,train_loader_s):
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
@@ -114,7 +115,7 @@ class TrainT:
                     self.opt_t.step()
                     self.opt_disc.step()
 
-                    if i % 500 == 0 and epoch % 10 == 0:
+                    if i % 50 == 0:
                         with torch.no_grad():
                             real_fake_images = torch.cat((samples[:4].add(1).mul(0.5)[:4], outputs.add(1).mul(0.5)[:4],style_images.add(1).mul(0.5)[:4]))
                             vutils.save_image(real_fake_images, os.path.join("results", f"1_{epoch}_{i}.jpg"), nrow=4)
@@ -123,8 +124,10 @@ class TrainT:
                         t_Loss=np.round(loss_value, 5)
                     )
                     pbar.update(0)
-                torch.save(self.transformer.state_dict(), os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
-        getTest(test_dataset_s,test_dataset_t,args)
+                if epoch%10==0:
+                    torch.save(self.transformer.state_dict(), os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
+        #getTest(test_dataset_s,test_dataset_t,args)
+        getTest(train_loader_s, train_loader_t, args)
 
 
 
@@ -138,8 +141,8 @@ if __name__ == '__main__':
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
-    parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--batch-size', type=int, default=2, help='Input batch size for training (default: 6)')
+    parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -180,9 +183,9 @@ if __name__ == '__main__':
                         help="")
     # * Loss coefficients
 
-    parser.add_argument('--content_loss_coef', default=1.0, type=float)
-    parser.add_argument('--style_loss_coef', default=10.0, type=float)
-    parser.add_argument('--tv_loss_coef', default=0.0001, type=float)
+    parser.add_argument('--content_loss_coef', default=20.0, type=float)
+    parser.add_argument('--style_loss_coef', default=1.0, type=float)
+    parser.add_argument('--tv_loss_coef', default=0.001, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
     parser.add_argument('--bbox_loss_coef', default=5, type=float)
@@ -195,11 +198,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
     # args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
-    args.dataset_path_s = [r"/home/zhang/PycharmProjects/input/style"]
-    args.dataset_path_t = [r"/home/zhang/PycharmProjects/input/content"]
+    args.dataset_path_s = [r"/home/zhang/PycharmProjects/zhangdaqian",r"/home/zhang/PycharmProjects/A"]
+    args.dataset_path_t = [r"/home/zhang/PycharmProjects/B"]
+    #args.dataset_path_s = [r"/home/zhang/PycharmProjects/input/style"]
+    #args.dataset_path_t = [r"/home/zhang/PycharmProjects/input/content"]
 
-    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_99.pt"
-    # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_99.pt"
+    args.checkpoint_path_style = r"/home/zhang/PycharmProjects/VQGAN-pytorch/checkpoints/transformer_epoch_90.pt"
+    # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_90.pt"
     train_t = TrainT(args)
 
 

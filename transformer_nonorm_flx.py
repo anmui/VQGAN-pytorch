@@ -8,6 +8,7 @@ Copy-paste from torch.nn.Transformer with modifications:
     * decoder returns a stack of activations from all decoding layers
 """
 import copy
+import math
 from typing import Optional, List
 
 import torch
@@ -328,18 +329,26 @@ class TransformerEncoderLayer(nn.Module):
         #     x, (H, W), pad = seq_padding(x[0], dividable_size=self.strip_width * 2, input_resolution=(H, W),
         #                                  pad_mode='constant')
         #  else:
-        H, W = 1, 1
-        # x = x[0]
+        #H, W = self.input_resolution
+        #print(self.input_resolution)
 
-        B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
+        # x = x[0]
+        x=self.with_pos_embed(src, pos)
+        L, B, C = x.shape
+        #print(L)
+        H=int(math.sqrt(L))
+        W=int(H)
+        #assert L == H * W, "input feature has wrong size"
 
         shortcut = x
         # x = self.norm1(x)
 
         x1 = self.attn1(x, shape=(H, W))
+        x1 = x1.permute(1, 0, 2)
         x2 = self.attn2(x, shape=(H, W))
+        x2 = x2.permute(1, 0, 2)
         x3 = self.attn3(x, shape=(H, W))
+        x3 = x3.permute(1, 0, 2)
 
         # Method 1
         # x = x1 + x2 + x3

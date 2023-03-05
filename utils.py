@@ -67,6 +67,12 @@ def load_data_2(args):
     test_dataset_t = DataLoader(test_dataset_t, batch_size=args.batch_size, shuffle=True)
     return train_dataset_s, train_dataset_t, test_dataset_s, test_dataset_t
 
+def load_data_3(args):
+    train_data_s = ImagePaths(args.dataset_path_s, size=256)
+    train_loader_s = DataLoader(train_data_s, batch_size=args.batch_size, shuffle=False)
+    train_data_t = ImagePaths(args.dataset_path_t, size=256)
+    train_loader_t = DataLoader(train_data_t, batch_size=args.batch_size, shuffle=False)
+    return train_loader_s, train_loader_t
 
 # --------------------------------------------- #
 #                  Module Utils
