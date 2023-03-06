@@ -314,25 +314,13 @@ class TransformerEncoderLayer(nn.Module):
         q = k = self.with_pos_embed(src, pos)
         # print("q.shape, k.shape, src.shape:",q.shape, k.shape, src.shape)
         # print(src.shape)
-        #
+
         # src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
         #                       key_padding_mask=src_key_padding_mask)[0]
-        # # print(self.self_attn(q, k, value=src, attn_mask=src_mask,
-        # #                       key_padding_mask=src_key_padding_mask)[1].shape)
-        # # assert(False)
-        x = src
-        # print(x.shape)
-        # arbitrary_input = x[1]
-        # if arbitrary_input:
-        #     H, W = x[2]
-        #     # x, (H, W) = seq_crop(x[0], dividable_size=self.strip_width*2, input_resolution=(H, W))
-        #     x, (H, W), pad = seq_padding(x[0], dividable_size=self.strip_width * 2, input_resolution=(H, W),
-        #                                  pad_mode='constant')
-        #  else:
-        #H, W = self.input_resolution
-        #print(self.input_resolution)
+        # print(self.self_attn(q, k, value=src, attn_mask=src_mask,
+        #                       key_padding_mask=src_key_padding_mask)[1].shape)
+        # assert(False)
 
-        # x = x[0]
         x=self.with_pos_embed(src, pos)
         L, B, C = x.shape
         #print(L)
@@ -341,7 +329,6 @@ class TransformerEncoderLayer(nn.Module):
         #assert L == H * W, "input feature has wrong size"
 
         shortcut = x
-        # x = self.norm1(x)
 
         x1 = self.attn1(x, shape=(H, W))
         x1 = x1.permute(1, 0, 2)

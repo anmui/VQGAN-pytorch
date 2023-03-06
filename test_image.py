@@ -32,5 +32,6 @@ def getTest(test_dataset_s,test_dataset_t,args):
             with torch.no_grad():
                 vutils.save_image(outputs, os.path.join("output/outputs", f"{i}.jpg"))
                 vutils.save_image(style_images, os.path.join("output/style_images", f"{i}.jpg"))
+                vutils.save_image(samples, os.path.join("output/content", f"{i}.jpg"))
 
 

@@ -84,12 +84,16 @@ class TrainT:
         for epoch in range(args.epochs):
             with tqdm(range(len(train_loader_t))) as pbar:
                 for i, samples, style_images in zip(pbar, train_loader_t, train_loader_s):
+                    # Empty GPU cache
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
                     outputs = self.transformer(samples, style_images)
                     outputs_cc = self.transformer(samples, samples)
-                    outputs_ss = self.transformer(style_images, style_images)
-                    loss_id_1 = self.mse_loss(outputs_cc, samples) + self.mse_loss(outputs_ss, style_images)
+                    #outputs_ss = self.transformer(style_images, style_images)
+                    loss_id_1 = self.mse_loss(outputs_cc, samples) \
+                                #+ self.mse_loss(outputs_ss, style_images)
                     # print(samples.shape)
                     # print(outputs.shape)
                     disc_real = self.discriminator(style_images)
@@ -137,19 +141,22 @@ class TrainT:
         # getTest(test_dataset_s,test_dataset_t,args)
         getTest(train_loader_s, train_loader_t, args)
 
+    def mse_loss(self, outputs_cc, samples):
+        return torch.nn.MSELoss()(outputs_cc,samples)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
     parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z (default: 256)')
-    parser.add_argument('--image-size', type=int, default=512, help='Image height and width (default: 256)')
+    parser.add_argument('--image-size', type=int, default=128, help='Image height and width (default: 256)')
     parser.add_argument('--patch-size', type=int, default=4, help='Patch height and width (default: 256)')
     parser.add_argument('--num-codebook-vectors', type=int, default=1024,
                         help='Number of codebook vectors (default: 256)')
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
-    parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
-    parser.add_argument('--batch-size', type=int, default=2, help='Input batch size for training (default: 6)')
+    parser.add_argument('--device', type=str, default="cuda:0", help='Which device the training is on')
+    parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
     parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
@@ -192,8 +199,8 @@ if __name__ == '__main__':
                         help="")
     # * Loss coefficients
 
-    parser.add_argument('--content_loss_coef', default=20.0, type=float)
-    parser.add_argument('--style_loss_coef', default=1.0, type=float)
+    parser.add_argument('--content_loss_coef', default=1.0, type=float)
+    parser.add_argument('--style_loss_coef', default=20.0, type=float)
     parser.add_argument('--tv_loss_coef', default=0.001, type=float)
     parser.add_argument('--id1_loss', default=10, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
