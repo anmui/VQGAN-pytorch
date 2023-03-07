@@ -35,7 +35,7 @@ class TrainT:
         self.criterion.to(device=args.device)
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
-        self.opt_t, self.opt_disc = self.configure_optimizers(args)
+        self.opt_t, self.opt_disc,self.opt_vq = self.configure_optimizers(args)
 
         self.prepare_training()
 
@@ -61,7 +61,18 @@ class TrainT:
         # print(self.discriminator)
         opt_disc = torch.optim.Adam(self.discriminator.parameters(),
                                     lr=lr, eps=1e-08, betas=(args.beta1, args.beta2))
-        return opt_t, opt_disc
+        opt_vq = torch.optim.Adam(
+            list(self.transformer.vqgan_t.encoder.parameters()) +
+            list(self.transformer.vqgan_s.encoder.parameters()) +
+            # list(self.transformer.vqgan_t.codebook.parameters()) +
+            list(self.transformer.vqgan_s.codebook.parameters()) +
+            list(self.transformer.vqgan_t.quant_conv.parameters()) +
+            list(self.transformer.vqgan_s.quant_conv.parameters()) +
+            # list(self.transformer.vqgan_t.post_quant_conv.parameters()) +
+            list(self.transformer.vqgan_s.post_quant_conv.parameters()),
+            lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
+        )
+        return opt_t, opt_disc ,opt_vq
 
     @staticmethod
     def prepare_training():
@@ -89,6 +100,20 @@ class TrainT:
                         torch.cuda.empty_cache()
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
+                    # codebook
+
+                    outputs_ss,q_loss = self.transformer(style_images, style_images)
+                    perceptual_loss = self.perceptual_loss(style_images, outputs)
+                    rec_loss = torch.abs(style_images - outputs)
+                    perceptual_rec_loss = args.perceptual_loss_factor * perceptual_loss + args.rec_loss_factor * rec_loss
+                    perceptual_rec_loss = perceptual_rec_loss.mean()
+
+                    vq_loss = perceptual_rec_loss + q_loss
+                    self.opt_vq.zero_grad()
+                    vq_loss.backward()
+                    self.opt_vq.step()
+
+
                     outputs = self.transformer(samples, style_images)
                     outputs_cc = self.transformer(samples, samples)
                     #outputs_ss = self.transformer(style_images, style_images)
@@ -118,6 +143,7 @@ class TrainT:
                     losses_reduced_scaled = sum(loss_dict_reduced_scaled.values())
 
                     loss_value = losses_reduced_scaled.item()
+
                     self.opt_t.zero_grad()
                     losses.backward(retain_graph=True)
                     self.opt_disc.zero_grad()
