@@ -30,8 +30,8 @@ def getTest(test_dataset_s,test_dataset_t,args):
             style_images = style_images.to(device=args.device)
             outputs = transformer.log_images(samples, style_images)
             with torch.no_grad():
-                vutils.save_image(outputs, os.path.join("output/outputs", f"{i}.jpg"))
-                vutils.save_image(style_images, os.path.join("output/style_images", f"{i}.jpg"))
-                vutils.save_image(samples, os.path.join("output/content", f"{i}.jpg"))
+                vutils.save_image(outputs, os.path.join("output/outputs_fix", f"{i}.jpg"))
+                vutils.save_image(style_images, os.path.join("output/style_images_fix", f"{i}.jpg"))
+                vutils.save_image(samples, os.path.join("output/content_fix", f"{i}.jpg"))
 
 

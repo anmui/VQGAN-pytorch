@@ -1,9 +1,9 @@
 import math
 import torch
 from torch import nn
-
 from model import to_2tuple
 from transformer_nonorm_flx import Transformer
+
 from util.misc import nested_tensor_from_tensor_list, NestedTensor
 from vqgan import VQGAN
 from decoder import Decoder
@@ -62,6 +62,10 @@ class Transformerr(nn.Module):
         #codebook_mapping_t, codebook_indices_t, q_loss_t = self.vqgan_t.codebook(quant_conv_encoded_images_t)
         codebook_mapping_s=self.vqgan_s.post_quant_conv(codebook_mapping_s)
         #codebook_mapping_t = self.vqgan_t.post_quant_conv(codebook_mapping_t)
+        # pca_s=torch.flatten(codebook_mapping_s,2)
+        # self.pca.fit(pca_s)
+        # trans_X = self.pca.transform(pca_s)
+        # pca_loss = self.torch_cov(trans_X)
         codebook_mapping_t=quant_conv_encoded_images_t
         #print(codebook_mapping_s.shape)
         b, c, h, w = codebook_mapping_s.shape
@@ -93,9 +97,14 @@ class Transformerr(nn.Module):
         res = self.tail(res)  # [B,3,H,W]
         #print(res.shape)
 
-        return res
+        return res,q_loss_s
     def load_checkpoint(self, path):
         self.load_state_dict(torch.load(path))
+
+    def torch_cov(input_vec: torch.tensor):
+        x = input_vec - torch.mean(input_vec, axis=0)
+        cov_matrix = torch.matmul(x.T, x) / (x.shape[0] - 1)
+        return cov_matrix
 
     @torch.no_grad()
     def log_images(self,simg,timg):

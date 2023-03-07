@@ -98,6 +98,7 @@ class CocoStyleTransfer(torchvision.datasets.CocoDetection):
         c_name=os.path.basename(content_image_path).split(".")[0]
         s_name=os.path.basename(style_image_path).split(".")[0]
         target = {'content_image_name': c_name, 'style_image_name': s_name}
+        #print(content_image_path)
         img = Image.open(content_image_path).convert("RGB")
         style_image = Image.open(style_image_path).convert("RGB")
         style_image = self.img_resize(style_image)

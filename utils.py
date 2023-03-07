@@ -1,6 +1,7 @@
 import os
 import albumentations
 import numpy as np
+import torch
 import torch.nn as nn
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
@@ -100,3 +101,24 @@ def plot_images(images):
     axarr[2].imshow(half_sample.cpu().detach().numpy()[0].transpose(1, 2, 0))
     axarr[3].imshow(full_sample.cpu().detach().numpy()[0].transpose(1, 2, 0))
     plt.show()
+#
+# class PCA(object):
+#     def __init__(self, n_components=2):
+#         self.n_components = n_components
+#
+#     def fit(self, X):
+#         n = X.shape[0]
+#         self.mean = torch.mean(X, axis=0)
+#         X = X - self.mean
+#         print(X.T.shape)
+#         print(X.shape)
+#         covariance_matrix = 1 / n * torch.matmul(X.permute(0,2,1), X)
+#         eigenvalues, eigenvectors = torch.eig(covariance_matrix, eigenvectors=True)
+#         eigenvalues = torch.norm(eigenvalues, dim=1)
+#         idx = torch.argsort(-eigenvalues)
+#         eigenvectors = eigenvectors[:, idx]
+#         self.proj_mat = eigenvectors[:, 0:self.n_components]
+#
+#     def transform(self, X):
+#         X = X - self.mean
+#         return X.matmul(self.proj_mat)

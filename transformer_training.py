@@ -89,10 +89,10 @@ class TrainT:
                         torch.cuda.empty_cache()
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
-                    outputs = self.transformer(samples, style_images)
-                    outputs_cc = self.transformer(samples, samples)
+                    outputs,q_loss = self.transformer(samples, style_images)
+                    #outputs_cc = self.transformer(samples, samples)
                     #outputs_ss = self.transformer(style_images, style_images)
-                    loss_id_1 = self.mse_loss(outputs_cc, samples) \
+                    #loss_id_1 = self.mse_loss(outputs_cc, samples) \
                                 #+ self.mse_loss(outputs_ss, style_images)
                     # print(samples.shape)
                     # print(outputs.shape)
@@ -107,7 +107,8 @@ class TrainT:
                     weight_dict = self.criterion.weight_dict
                     g_loss = -torch.mean(disc_fake)
                     losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if
-                                 k in weight_dict) + g_loss + args.id1_loss * loss_id_1
+                                 k in weight_dict) + g_loss + q_loss \
+                    #+ args.id1_loss * loss_id_1
 
                     # reduce losses over all GPUs for logging purposes
                     loss_dict_reduced = util.misc.reduce_dict(loss_dict)
@@ -129,7 +130,7 @@ class TrainT:
                         with torch.no_grad():
                             real_fake_images = torch.cat((samples[:4].add(1).mul(0.5)[:4], outputs.add(1).mul(0.5)[:4],
                                                           style_images.add(1).mul(0.5)[:4]))
-                            vutils.save_image(real_fake_images, os.path.join("results", f"1_{epoch}_{i}.jpg"), nrow=4)
+                            vutils.save_image(real_fake_images, os.path.join("results", f"1_{epoch}_{i}_src2.jpg"), nrow=4)
 
                     pbar.set_postfix(
                         t_Loss=np.round(loss_value, 5)
@@ -155,9 +156,9 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
-    parser.add_argument('--device', type=str, default="cuda:0", help='Which device the training is on')
+    parser.add_argument('--device', type=str, default="cuda:1", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -200,8 +201,8 @@ if __name__ == '__main__':
     # * Loss coefficients
 
     parser.add_argument('--content_loss_coef', default=1.0, type=float)
-    parser.add_argument('--style_loss_coef', default=20.0, type=float)
-    parser.add_argument('--tv_loss_coef', default=0.001, type=float)
+    parser.add_argument('--style_loss_coef', default=1.0, type=float)
+    parser.add_argument('--tv_loss_coef', default=0, type=float)
     parser.add_argument('--id1_loss', default=10, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
@@ -213,13 +214,14 @@ if __name__ == '__main__':
                         help="Type of positional embedding to use on top of the image features")
 
     args = parser.parse_args()
-    # args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
-    # args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
-    args.dataset_path_s = [r"/home/zhang/PycharmProjects/zhangdaqian", r"/home/zhang/PycharmProjects/A"]
-    args.dataset_path_t = [r"/home/zhang/PycharmProjects/B"]
+    args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
+    args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
+    # args.dataset_path_s = [r"/home/zhang/PycharmProjects/zhangdaqian", r"/home/zhang/PycharmProjects/A"]
+    # args.dataset_path_t = [r"/home/zhang/PycharmProjects/B"]
     # args.dataset_path_s = [r"/home/zhang/PycharmProjects/input/style"]
     # args.dataset_path_t = [r"/home/zhang/PycharmProjects/input/content"]
 
-    args.checkpoint_path_style = r"/home/zhang/PycharmProjects/VQGAN-pytorch/checkpoints/transformer_epoch_90.pt"
+    #args.checkpoint_path_style = r"/home/zhang/PycharmProjects/VQGAN-pytorch/checkpoints/transformer_epoch_90.pt"
+    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_190.pt"
     # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_90.pt"
     train_t = TrainT(args)
