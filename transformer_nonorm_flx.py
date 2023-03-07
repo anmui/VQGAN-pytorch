@@ -290,6 +290,7 @@ class TransformerEncoderLayer(nn.Module):
         # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.dropout = nn.Dropout(dropout)
+        self.dropout_1 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(dim_feedforward, d_model)
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
@@ -315,23 +316,9 @@ class TransformerEncoderLayer(nn.Module):
         # print("q.shape, k.shape, src.shape:",q.shape, k.shape, src.shape)
         # print(src.shape)
         #
-        # src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
-        #                       key_padding_mask=src_key_padding_mask)[0]
-        # # print(self.self_attn(q, k, value=src, attn_mask=src_mask,
-        # #                       key_padding_mask=src_key_padding_mask)[1].shape)
-        # # assert(False)
+        src3 = self.self_attn(q, k, value=src, attn_mask=src_mask,
+                              key_padding_mask=src_key_padding_mask)[0]
         x = src
-        # print(x.shape)
-        # arbitrary_input = x[1]
-        # if arbitrary_input:
-        #     H, W = x[2]
-        #     # x, (H, W) = seq_crop(x[0], dividable_size=self.strip_width*2, input_resolution=(H, W))
-        #     x, (H, W), pad = seq_padding(x[0], dividable_size=self.strip_width * 2, input_resolution=(H, W),
-        #                                  pad_mode='constant')
-        #  else:
-        #H, W = self.input_resolution
-        #print(self.input_resolution)
-
         # x = x[0]
         x=self.with_pos_embed(src, pos)
         L, B, C = x.shape
@@ -358,7 +345,11 @@ class TransformerEncoderLayer(nn.Module):
         attn_x = (q_x @ k_x.transpose(-1, -2)).softmax(dim=-1)
         x = attn_x @ k_x
         x = x.squeeze(dim=2)
-        src2 = x
+        q_2 = x
+        k_2= src3
+        attn_2 = (q_2 @ k_2.transpose(-1, -2)).softmax(dim=-1)
+        x = attn_2 @ k_2
+        src2 = src3 + self.dropout_1(x)
         src = src + self.dropout1(src2)
         if self.enorm:
             src = self.norm1(src)
