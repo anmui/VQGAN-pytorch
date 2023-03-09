@@ -51,11 +51,12 @@ class TrainT:
             list(self.transformer.vqgan_t.encoder.parameters()) +
             list(self.transformer.vqgan_s.encoder.parameters()) +
             # list(self.transformer.vqgan_t.codebook.parameters()) +
-            list(self.transformer.vqgan_s.codebook.parameters()) +
+            #list(self.transformer.vqgan_s.codebook.parameters()) +
             list(self.transformer.vqgan_t.quant_conv.parameters()) +
-            list(self.transformer.vqgan_s.quant_conv.parameters()) +
+            list(self.transformer.vqgan_s.quant_conv.parameters())
             # list(self.transformer.vqgan_t.post_quant_conv.parameters()) +
-            list(self.transformer.vqgan_s.post_quant_conv.parameters()),
+            #list(self.transformer.vqgan_s.post_quant_conv.parameters())
+            ,
             lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
         )
         # print(self.discriminator)
@@ -89,7 +90,8 @@ class TrainT:
                         torch.cuda.empty_cache()
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
-                    outputs,q_loss = self.transformer(samples, style_images)
+                    #samples=style_images
+                    outputs = self.transformer(samples, style_images)
                     #outputs_cc = self.transformer(samples, samples)
                     #outputs_ss = self.transformer(style_images, style_images)
                     #loss_id_1 = self.mse_loss(outputs_cc, samples) \
@@ -107,7 +109,7 @@ class TrainT:
                     weight_dict = self.criterion.weight_dict
                     g_loss = -torch.mean(disc_fake)
                     losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if
-                                 k in weight_dict) + g_loss + q_loss \
+                                 k in weight_dict) + g_loss\
                     #+ args.id1_loss * loss_id_1
 
                     # reduce losses over all GPUs for logging purposes
@@ -222,6 +224,7 @@ if __name__ == '__main__':
     # args.dataset_path_t = [r"/home/zhang/PycharmProjects/input/content"]
 
     #args.checkpoint_path_style = r"/home/zhang/PycharmProjects/VQGAN-pytorch/checkpoints/transformer_epoch_90.pt"
-    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_190.pt"
+    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_90.pt"
+    args.checkpoint_vggans=r"/media/lab/sdb/zzc/myVQGAN1/checkpoints/vqganB_epoch_99.pt"
     # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_90.pt"
     train_t = TrainT(args)
