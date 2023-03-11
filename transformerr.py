@@ -93,7 +93,7 @@ class Transformerr(nn.Module):
         res = self.tail(res)  # [B,3,H,W]
         #print(res.shape)
 
-        return res
+        return res,q_loss_s
     def load_checkpoint(self, path):
         self.load_state_dict(torch.load(path))
 

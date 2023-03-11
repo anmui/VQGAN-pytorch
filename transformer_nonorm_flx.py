@@ -154,7 +154,7 @@ class Transformer(nn.Module):
         if len(src.shape) == 4:
             return hs.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
         else:
-            return hs.transpose(1, 2), memory.permute(1, 2, 0)
+            return hs.transpose(1, 2), memory.permute(1, 2, 0) ,tgt
 
 
 class TransformerEncoder(nn.Module):
@@ -313,43 +313,10 @@ class TransformerEncoderLayer(nn.Module):
                      src_key_padding_mask: Optional[Tensor] = None,
                      pos: Optional[Tensor] = None):
         q = k = self.with_pos_embed(src, pos)
-        # print("q.shape, k.shape, src.shape:",q.shape, k.shape, src.shape)
-        # print(src.shape)
-        #
-        src3 = self.self_attn(q, k, value=src, attn_mask=src_mask,
+
+        src2= self.self_attn(q, k, value=src, attn_mask=src_mask,
                               key_padding_mask=src_key_padding_mask)[0]
-        x = src
-        # x = x[0]
-        x=self.with_pos_embed(src, pos)
-        L, B, C = x.shape
-        #print(L)
-        H=int(math.sqrt(L))
-        W=int(H)
-        #assert L == H * W, "input feature has wrong size"
 
-        shortcut = x
-        # x = self.norm1(x)
-
-        x1 = self.attn1(x, shape=(H, W))
-        x1 = x1.permute(1, 0, 2)
-        x2 = self.attn2(x, shape=(H, W))
-        x2 = x2.permute(1, 0, 2)
-        x3 = self.attn3(x, shape=(H, W))
-        x3 = x3.permute(1, 0, 2)
-
-        # Method 1
-        # x = x1 + x2 + x3
-        # Method 2
-        q_x = x.unsqueeze(dim=2)
-        k_x = torch.stack([x, x1, x2, x3], dim=2)
-        attn_x = (q_x @ k_x.transpose(-1, -2)).softmax(dim=-1)
-        x = attn_x @ k_x
-        x = x.squeeze(dim=2)
-        q_2 = x
-        k_2= src3
-        attn_2 = (q_2 @ k_2.transpose(-1, -2)).softmax(dim=-1)
-        x = attn_2 @ k_2
-        src2 = src3 + self.dropout_1(x)
         src = src + self.dropout1(src2)
         if self.enorm:
             src = self.norm1(src)

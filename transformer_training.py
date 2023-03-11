@@ -36,6 +36,7 @@ class TrainT:
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
         self.opt_t, self.opt_disc,self.opt_vq = self.configure_optimizers(args)
+        self.perceptual_loss=LPIPS().eval().to(device=args.device)
 
         self.prepare_training()
 
@@ -54,6 +55,7 @@ class TrainT:
             list(self.transformer.vqgan_s.codebook.parameters()) +
             list(self.transformer.vqgan_t.quant_conv.parameters()) +
             list(self.transformer.vqgan_s.quant_conv.parameters()) +
+            list(self.transformer.input_proj_s.parameters()) +
             # list(self.transformer.vqgan_t.post_quant_conv.parameters()) +
             list(self.transformer.vqgan_s.post_quant_conv.parameters()),
             lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
@@ -101,10 +103,10 @@ class TrainT:
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
                     # codebook
-
+                    self.transformer.transformer.eval()
                     outputs_ss,q_loss = self.transformer(style_images, style_images)
-                    perceptual_loss = self.perceptual_loss(style_images, outputs)
-                    rec_loss = torch.abs(style_images - outputs)
+                    perceptual_loss = self.perceptual_loss(style_images, outputs_ss)
+                    rec_loss = torch.abs(style_images - outputs_ss)
                     perceptual_rec_loss = args.perceptual_loss_factor * perceptual_loss + args.rec_loss_factor * rec_loss
                     perceptual_rec_loss = perceptual_rec_loss.mean()
 
@@ -112,12 +114,12 @@ class TrainT:
                     self.opt_vq.zero_grad()
                     vq_loss.backward()
                     self.opt_vq.step()
-
-
-                    outputs = self.transformer(samples, style_images)
-                    outputs_cc = self.transformer(samples, samples)
+                    self.transformer.transformer.train()
+                    self.transformer.vqgan_s.codebook.eval()
+                    outputs,_ = self.transformer(samples, style_images)
+                    #outputs_cc = self.transformer(samples, samples)
                     #outputs_ss = self.transformer(style_images, style_images)
-                    loss_id_1 = self.mse_loss(outputs_cc, samples) \
+                    #loss_id_1 = self.mse_loss(outputs_cc, samples) \
                                 #+ self.mse_loss(outputs_ss, style_images)
                     # print(samples.shape)
                     # print(outputs.shape)
@@ -132,7 +134,7 @@ class TrainT:
                     weight_dict = self.criterion.weight_dict
                     g_loss = -torch.mean(disc_fake)
                     losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if
-                                 k in weight_dict) + g_loss + args.id1_loss * loss_id_1
+                                 k in weight_dict) + g_loss
 
                     # reduce losses over all GPUs for logging purposes
                     loss_dict_reduced = util.misc.reduce_dict(loss_dict)
@@ -150,7 +152,7 @@ class TrainT:
                     gan_loss.backward()
                     self.opt_t.step()
                     self.opt_disc.step()
-
+                    self.transformer.vqgan_s.codebook.train()
                     if i % 50 == 0:
                         with torch.no_grad():
                             real_fake_images = torch.cat((samples[:4].add(1).mul(0.5)[:4], outputs.add(1).mul(0.5)[:4],
@@ -183,7 +185,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
     parser.add_argument('--device', type=str, default="cuda:0", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -226,8 +228,8 @@ if __name__ == '__main__':
     # * Loss coefficients
 
     parser.add_argument('--content_loss_coef', default=1.0, type=float)
-    parser.add_argument('--style_loss_coef', default=20.0, type=float)
-    parser.add_argument('--tv_loss_coef', default=0.001, type=float)
+    parser.add_argument('--style_loss_coef', default=1.0, type=float)
+    parser.add_argument('--tv_loss_coef', default=0, type=float)
     parser.add_argument('--id1_loss', default=10, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
@@ -239,13 +241,15 @@ if __name__ == '__main__':
                         help="Type of positional embedding to use on top of the image features")
 
     args = parser.parse_args()
-    # args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
-    # args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
-    args.dataset_path_s = [r"/home/zhang/PycharmProjects/zhangdaqian", r"/home/zhang/PycharmProjects/A"]
-    args.dataset_path_t = [r"/home/zhang/PycharmProjects/B"]
+    args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
+    args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
+    # args.dataset_path_s = [r"/home/zhang/PycharmProjects/zhangdaqian", r"/home/zhang/PycharmProjects/A"]
+    # args.dataset_path_t = [r"/home/zhang/PycharmProjects/B"]
     # args.dataset_path_s = [r"/home/zhang/PycharmProjects/input/style"]
     # args.dataset_path_t = [r"/home/zhang/PycharmProjects/input/content"]
 
-    args.checkpoint_path_style = r"/home/zhang/PycharmProjects/VQGAN-pytorch/checkpoints/transformer_epoch_90.pt"
+    #args.checkpoint_path_style = r"/home/zhang/PycharmProjects/VQGAN-pytorch/checkpoints/transformer_epoch_90.pt"
     # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_90.pt"
+    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN1/checkpoints/transformer_epoch_190.pt"
+
     train_t = TrainT(args)

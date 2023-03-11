@@ -9,6 +9,7 @@ from discriminator import Discriminator
 from lpips import LPIPS
 from vqgan import VQGAN
 from utils import load_data, weights_init
+from test_image import getTestVQgan
 from fcn import FCN
 
 
@@ -22,7 +23,7 @@ class TrainVQGAN:
         self.discriminator.apply(weights_init)
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
-        self.fcn=FCN().to(device=args.device)
+        #self.fcn=FCN().to(device=args.device)
 
         self.prepare_training()
 
@@ -30,12 +31,17 @@ class TrainVQGAN:
 
     def configure_optimizers(self, args):
         lr = args.learning_rate
+        # opt_vq = torch.optim.Adam(
+        #     list(self.vqgan.encoder.parameters()) +
+        #     #list(self.vqgan.decoder.parameters()) +
+        #     list(self.vqgan.codebook.parameters()) +
+        #     list(self.vqgan.quant_conv.parameters()) +
+        #     list(self.vqgan.post_quant_conv.parameters()) +
+        #     list(self.vqgan.transformer.parameters()),
+        #     lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
+        # )
         opt_vq = torch.optim.Adam(
-            list(self.vqgan.encoder.parameters()) +
-            list(self.vqgan.decoder.parameters()) +
-            list(self.vqgan.codebook.parameters()) +
-            list(self.vqgan.quant_conv.parameters()) +
-            list(self.vqgan.post_quant_conv.parameters()),
+            list(self.vqgan.parameters()),
             lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
         )
         opt_disc = torch.optim.Adam(self.discriminator.parameters(),
@@ -60,7 +66,7 @@ class TrainVQGAN:
                     disc_real = self.discriminator(imgs)
                     disc_fake = self.discriminator(decoded_images)
 
-                    #disc_factor = self.vqgan.adopt_weight(args.disc_factor, epoch*steps_per_epoch+i, threshold=args.disc_start)
+                    disc_factor = self.vqgan.adopt_weight(args.disc_factor, epoch*steps_per_epoch+i, threshold=args.disc_start)
 
                     perceptual_loss = self.perceptual_loss(imgs, decoded_images)
                     rec_loss = torch.abs(imgs - decoded_images)
@@ -68,14 +74,13 @@ class TrainVQGAN:
                     perceptual_rec_loss = perceptual_rec_loss.mean()
                     g_loss = -torch.mean(disc_fake)
 
-                    fcn_loss=self.fcn(imgs, decoded_images)
+                    #fcn_loss=self.fcn(imgs, decoded_images)
 
-                    #λ = self.vqgan.calculate_lambda(perceptual_rec_loss, g_loss)
-                    vq_loss = perceptual_rec_loss + q_loss +  g_loss + 0.001*fcn_loss
-
+                    λ = self.vqgan.calculate_lambda(perceptual_rec_loss, g_loss)
+                    vq_loss = perceptual_rec_loss + q_loss + disc_factor*λ*g_loss
                     d_loss_real = torch.mean(F.relu(1. - disc_real))
                     d_loss_fake = torch.mean(F.relu(1. + disc_fake))
-                    gan_loss = (d_loss_real + d_loss_fake)
+                    gan_loss = disc_factor*0.5*(d_loss_real + d_loss_fake)
 
                     self.opt_vq.zero_grad()
                     vq_loss.backward(retain_graph=True)
@@ -86,10 +91,10 @@ class TrainVQGAN:
                     self.opt_vq.step()
                     self.opt_disc.step()
 
-                    if i % 10 == 0:
+                    if i % 50 == 0:
                         with torch.no_grad():
                             real_fake_images = torch.cat((imgs[:4].add(1).mul(0.5)[:4], decoded_images.add(1).mul(0.5)[:4]))
-                            vutils.save_image(real_fake_images, os.path.join("results", f"B_{epoch}_{i}.jpg"), nrow=4)
+                            vutils.save_image(real_fake_images, os.path.join("results/vq", f"B_{epoch}_{i}.jpg"), nrow=4)
 
                     pbar.set_postfix(
                         VQ_Loss=np.round(vq_loss.cpu().detach().numpy().item(), 5),
@@ -98,18 +103,20 @@ class TrainVQGAN:
                     pbar.update(0)
                 torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", f"vqganB_epoch_{epoch}.pt"))
 
+        getTestVQgan(train_dataset,args)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
     parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z (default: 256)')
-    parser.add_argument('--image-size', type=int, default=256, help='Image height and width (default: 256)')
+    parser.add_argument('--image-size', type=int, default=512, help='Image height and width (default: 256)')
+    parser.add_argument('--patch-size', type=int, default=4, help='Patch height and width (default: 256)')
     parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors (default: 256)')
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
-    parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
+    parser.add_argument('--device', type=str, default="cuda:0", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=300, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -118,9 +125,12 @@ if __name__ == '__main__':
     parser.add_argument('--rec-loss-factor', type=float, default=1., help='Weighting factor for reconstruction loss.')
     parser.add_argument('--perceptual-loss-factor', type=float, default=1., help='Weighting factor for perceptual loss.')
 
+
     args = parser.parse_args()
-    #args.dataset_path = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
-    args.dataset_path = [ r"/media/lab/sdb/zzc/B"]
+    args.dataset_path = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
+    #args.dataset_path = [ r"/media/lab/sdb/zzc/B"]
+    args.checkpoint_path_vq = r"/media/lab/sdb/zzc/myVQGAN1/checkpoints/vqganB_epoch_299.pt"
+
     train_vqgan = TrainVQGAN(args)
 
 

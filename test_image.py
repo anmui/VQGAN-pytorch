@@ -34,4 +34,17 @@ def getTest(test_dataset_s,test_dataset_t,args):
                 vutils.save_image(style_images, os.path.join("output/style_images", f"{i}.jpg"))
                 vutils.save_image(samples, os.path.join("output/content", f"{i}.jpg"))
 
+def getTestVQgan(test_dataset,args):
+    vqgan = VQGAN(args).to(device=args.device)
+    vqgan.load_checkpoint(args.checkpoint_path_vq);
+    vqgan.eval()
+    with tqdm(range(len(test_dataset))) as pbar:
+        for i, style_images in zip(pbar,test_dataset):
+            #samples = samples.to(device=args.device)
+            style_images = style_images.to(device=args.device)
+            outputs = vqgan.log_images(style_images)
+            with torch.no_grad():
+                vutils.save_image(outputs, os.path.join("output/outputs", f"{i}.jpg"))
+                vutils.save_image(style_images, os.path.join("output/style_images", f"{i}.jpg"))
+                #vutils.save_image(samples, os.path.join("output/content", f"{i}.jpg"))
 

@@ -3,7 +3,10 @@ import torch.nn as nn
 from encoder import Encoder
 from decoder import Decoder
 from codebook import Codebook
-
+from model import to_2tuple
+from transformer_nonorm_flx import Transformer
+from position_encoding import build_position_encoding_ours
+from util.misc import nested_tensor_from_tensor_list, NestedTensor
 
 class VQGAN(nn.Module):
     def __init__(self, args):
@@ -14,6 +17,7 @@ class VQGAN(nn.Module):
         self.quant_conv = nn.Conv2d(args.latent_dim, args.latent_dim, 1).to(device=args.device)
         self.post_quant_conv = nn.Conv2d(args.latent_dim, args.latent_dim, 1).to(device=args.device)
 
+
     def forward(self, imgs):
         encoded_images = self.encoder(imgs)
         quant_conv_encoded_images = self.quant_conv(encoded_images)
@@ -21,6 +25,7 @@ class VQGAN(nn.Module):
         codebook_mapping, codebook_indices, q_loss = self.codebook(quant_conv_encoded_images)
         #print(codebook_mapping.shape)
         post_quant_conv_mapping = self.post_quant_conv(codebook_mapping)
+
         decoded_images = self.decoder(post_quant_conv_mapping)
 
         return decoded_images, codebook_indices, q_loss
@@ -54,6 +59,18 @@ class VQGAN(nn.Module):
 
     def load_checkpoint(self, path):
         self.load_state_dict(torch.load(path))
+
+    def log_images(self,imgs):
+        encoded_images = self.encoder(imgs)
+        quant_conv_encoded_images = self.quant_conv(encoded_images)
+        # print(quant_conv_encoded_images.shape)
+        codebook_mapping, codebook_indices, q_loss = self.codebook(quant_conv_encoded_images)
+        # print(codebook_mapping.shape)
+        post_quant_conv_mapping = self.post_quant_conv(codebook_mapping)
+
+        decoded_images = self.decoder(post_quant_conv_mapping)
+        return decoded_images
+
 
 
 
