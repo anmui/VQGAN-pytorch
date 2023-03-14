@@ -23,7 +23,7 @@ class TrainVQGAN:
         self.discriminator.apply(weights_init)
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
-        #self.fcn=FCN().to(device=args.device)
+        self.fcn=FCN().to(device=args.device)
 
         self.prepare_training()
 
@@ -76,8 +76,8 @@ class TrainVQGAN:
 
                     #fcn_loss=self.fcn(imgs, decoded_images)
 
-                    λ = self.vqgan.calculate_lambda(perceptual_rec_loss, g_loss)
-                    vq_loss = perceptual_rec_loss + q_loss + disc_factor*λ*g_loss
+                    #λ = self.vqgan.calculate_lambda(perceptual_rec_loss, g_loss)
+                    vq_loss = perceptual_rec_loss + q_loss + g_loss
                     d_loss_real = torch.mean(F.relu(1. - disc_real))
                     d_loss_fake = torch.mean(F.relu(1. + disc_fake))
                     gan_loss = disc_factor*0.5*(d_loss_real + d_loss_fake)
