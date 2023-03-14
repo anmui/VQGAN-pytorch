@@ -321,32 +321,33 @@ class TransformerEncoderLayer(nn.Module):
         # #                       key_padding_mask=src_key_padding_mask)[1].shape)
         # # assert(False)
         #
-        # x=self.with_pos_embed(src, pos)
-        # L, B, C = x.shape
-        # #print(L)
-        # H=int(math.sqrt(L))
-        # W=int(H)
-        # #assert L == H * W, "input feature has wrong size"
-        #
-        # shortcut = x
-        #
-        # x1 = self.attn1(x, shape=(H, W))
-        # x1 = x1.permute(1, 0, 2)
-        # x2 = self.attn2(x, shape=(H, W))
-        # x2 = x2.permute(1, 0, 2)
-        # x3 = self.attn3(x, shape=(H, W))
-        # x3 = x3.permute(1, 0, 2)
-        #
-        # # Method 1
-        # # x = x1 + x2 + x3
-        # # Method 2
-        # q_x = x.unsqueeze(dim=2)
-        # k_x = torch.stack([x, x1, x2, x3], dim=2)
-        # attn_x = (q_x @ k_x.transpose(-1, -2)).softmax(dim=-1)
-        # x = attn_x @ k_x
-        # x = x.squeeze(dim=2)
+        x=self.with_pos_embed(src, pos)
+        L, B, C = x.shape
+        #print(L)
+        H=int(math.sqrt(L))
+        W=int(H)
+        #assert L == H * W, "input feature has wrong size"
+
+        shortcut = x
+
+        x1 = self.attn1(x, shape=(H, W))
+        x1 = x1.permute(1, 0, 2)
+        x2 = self.attn2(x, shape=(H, W))
+        x2 = x2.permute(1, 0, 2)
+        x3 = self.attn3(x, shape=(H, W))
+        x3 = x3.permute(1, 0, 2)
+
+        # Method 1
+        # x = x1 + x2 + x3
+        # Method 2
+        q_x = x.unsqueeze(dim=2)
+        k_x = torch.stack([x, x1, x2, x3], dim=2)
+        attn_x = (q_x @ k_x.transpose(-1, -2)).softmax(dim=-1)
+        x = attn_x @ k_x
+        x = x.squeeze(dim=2)
         # src2 = x
-        src = src + self.dropout1(src2)
+        src = src + self.dropout1(x)
+        #src = src + self.dropout1(src2)
         if self.enorm:
             src = self.norm1(src)
         src2 = self.linear2(self.dropout(self.activation(self.linear1(src))))
@@ -390,6 +391,37 @@ class TransformerDecoderLayer(nn.Module):
                  activation="relu", normalize_before=False, dnorm=False):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        strip_width=1
+        qkv_bias = True
+        drop = 0.
+        attn_drop = 0.
+        input_resolution = (1, 1)
+        self.attn1 = StripAttention(
+            d_model=d_model,
+            nhead=nhead,
+            strip_width=strip_width,
+            is_vertical=False,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=drop
+        )
+        self.attn2 = StripAttention(
+            d_model=d_model,
+            nhead=nhead,
+            strip_width=strip_width,
+            is_vertical=True,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=drop
+        )
+        self.attn3 = WindowAttention_Kai(
+            d_model=d_model,
+            window_size=(strip_width * 2, strip_width * 2),
+            nhead=nhead,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=drop
+        )
         self.multihead_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
         # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward)
@@ -421,7 +453,32 @@ class TransformerDecoderLayer(nn.Module):
         q = k = self.with_pos_embed(tgt, query_pos)
         tgt2 = self.self_attn(q, k, value=tgt, attn_mask=tgt_mask,
                               key_padding_mask=tgt_key_padding_mask)[0]
-        tgt = tgt + self.dropout1(tgt2)
+        x=self.with_pos_embed(tgt, pos)
+        L, B, C = x.shape
+        #print(L)
+        H=int(math.sqrt(L))
+        W=int(H)
+        #assert L == H * W, "input feature has wrong size"
+
+        shortcut = x
+
+        x1 = self.attn1(x, shape=(H, W))
+        x1 = x1.permute(1, 0, 2)
+        x2 = self.attn2(x, shape=(H, W))
+        x2 = x2.permute(1, 0, 2)
+        x3 = self.attn3(x, shape=(H, W))
+        x3 = x3.permute(1, 0, 2)
+
+        # Method 1
+        # x = x1 + x2 + x3
+        # Method 2
+        q_x = x.unsqueeze(dim=2)
+        k_x = torch.stack([x, x1, x2, x3], dim=2)
+        attn_x = (q_x @ k_x.transpose(-1, -2)).softmax(dim=-1)
+        x = attn_x @ k_x
+        x = x.squeeze(dim=2)
+        tgt = tgt + self.dropout1(x)
+        #tgt = tgt + self.dropout1(tgt2)
         if self.dnorm:
             tgt = self.norm1(tgt)
         #         print("self.with_pos_embed(tgt, query_pos).shape,self.with_pos_embed(memory, pos).shape,memory.shape:",

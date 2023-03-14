@@ -20,4 +20,5 @@ class FCN(nn.Module):
         output1 = self.fcn(real_x)['out']
         output2 = self.fcn(fake_x)['out']
         #return ((norm_tensor(output1)-norm_tensor(output2))**2).sum()
+
         return torch.mean(F.relu(torch.abs(output1 - output2)))

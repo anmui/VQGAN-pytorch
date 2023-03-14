@@ -7,8 +7,9 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from torch.utils.data import random_split
-
-
+from datasets import build_dataset, get_coco_api_from_dataset
+from torch.utils.data import DataLoader, DistributedSampler
+import util.misc as utils
 # --------------------------------------------- #
 #                  Data Utils
 # --------------------------------------------- #
@@ -74,7 +75,13 @@ def load_data_3(args):
     train_data_t = ImagePaths(args.dataset_path_t, size=256)
     train_loader_t = DataLoader(train_data_t, batch_size=args.batch_size, shuffle=False)
     return train_loader_s, train_loader_t
-
+def load_data_4(args):
+    dataset_val = build_dataset('val', args)
+    #sampler_val = DistributedSampler(dataset_val, shuffle=False)
+    sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+    data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
+                                 drop_last=False, collate_fn=utils.collate_fn_st, num_workers=1)
+    return data_loader_val
 # --------------------------------------------- #
 #                  Module Utils
 #            for Encoder, Decoder etc.

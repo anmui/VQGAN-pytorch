@@ -18,7 +18,8 @@ from transformerr import Transformerr
 from vqgan import VQGAN
 from utils import load_data, weights_init
 from fcn import FCN
-
+from deeplabv3.model.deeplabv3 import DeepLabV3
+import logging
 print(torch.__version__)
 print(torch.cuda.is_available())
 
@@ -36,7 +37,10 @@ class TrainT:
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
         self.opt_t, self.opt_disc = self.configure_optimizers(args)
-
+        self.deeplabv3 = DeepLabV3("eval_seq_thn", project_dir="/media/lab/sdb/zzc/deeplabv3").cuda()
+        self.deeplabv3.load_state_dict(
+            torch.load("/media/lab/sdb/zzc/myVQGAN/deeplabv3/pretrained_models/model_13_2_2_2_epoch_580.pth"))
+        self.deeplabv3.eval()
         self.prepare_training()
 
         self.train(args)
@@ -49,11 +53,13 @@ class TrainT:
             list(self.transformer.tail.parameters()) +
             list(self.transformer.output_proj.parameters()) +
             list(self.transformer.vqgan_t.encoder.parameters()) +
-            list(self.transformer.vqgan_s.encoder.parameters()) +
+            #list(self.transformer.vqgan_s.encoder.parameters()) +
             # list(self.transformer.vqgan_t.codebook.parameters()) +
             #list(self.transformer.vqgan_s.codebook.parameters()) +
             list(self.transformer.vqgan_t.quant_conv.parameters()) +
-            list(self.transformer.vqgan_s.quant_conv.parameters())
+            #list(self.transformer.vqgan_s.quant_conv.parameters()) +
+            list(self.transformer.input_proj_c.parameters()) +
+            list(self.transformer.input_proj_s.parameters())
             # list(self.transformer.vqgan_t.post_quant_conv.parameters()) +
             #list(self.transformer.vqgan_s.post_quant_conv.parameters())
             ,
@@ -98,6 +104,9 @@ class TrainT:
                                 #+ self.mse_loss(outputs_ss, style_images)
                     # print(samples.shape)
                     # print(outputs.shape)
+                    # outputs_deeplab = self.deeplabv3(outputs)
+                    # inputs_deeplab = self.deeplabv3(samples)
+                    # deeplab_loss=torch.mean(F.relu(torch.abs(outputs_deeplab - inputs_deeplab)))
                     disc_real = self.discriminator(style_images)
                     disc_fake = self.discriminator(outputs)
                     d_loss_real = torch.mean(F.relu(1. - disc_real))
@@ -109,7 +118,8 @@ class TrainT:
                     weight_dict = self.criterion.weight_dict
                     g_loss = -torch.mean(disc_fake)
                     losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if
-                                 k in weight_dict) + g_loss\
+                                 k in weight_dict) + g_loss \
+                             #+ 0.01*deeplab_loss \
                     #+ args.id1_loss * loss_id_1
 
                     # reduce losses over all GPUs for logging purposes
@@ -142,6 +152,80 @@ class TrainT:
                     torch.save(self.transformer.state_dict(),
                                os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
         # getTest(test_dataset_s,test_dataset_t,args)
+        # data_loader = utils.load_data_4(args)
+        # metric_logger = util.misc.MetricLogger(delimiter="  ")
+        # #     metric_logger.add_meter('class_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
+        # header = 'Train:'
+        # logging.basicConfig(filename=os.path.join("/media/lab/sdb/zzc/myVQGAN/output", "log_eval.txt"),
+        #                     format='%(asctime)-15s %(message)s')
+        #
+        # logger = logging.getLogger()
+        # logger.setLevel(logging.INFO)
+        # console = logging.StreamHandler()
+        # logging.getLogger('').addHandler(console)
+        # for epoch in range(args.epochs):
+        #     for it, (samples, style_images, targets) in metric_logger.log_every(data_loader, 100, logger, header):
+        #         #         if it<=3:
+        #         #             continue
+        #
+        #         # Empty GPU cache
+        #         if torch.cuda.is_available():
+        #             torch.cuda.empty_cache()
+        #         samples = samples.tensors.to(device=args.device)
+        #         style_images = style_images.tensors.to(device=args.device)
+        #         #samples=style_images
+        #         outputs = self.transformer(samples, style_images)
+        #         #outputs_cc = self.transformer(samples, samples)
+        #         #outputs_ss = self.transformer(style_images, style_images)
+        #         #loss_id_1 = self.mse_loss(outputs_cc, samples) \
+        #                     #+ self.mse_loss(outputs_ss, style_images)
+        #         # print(samples.shape)
+        #         # print(outputs.shape)
+        #         # outputs_deeplab = self.deeplabv3(outputs)
+        #         # inputs_deeplab = self.deeplabv3(samples)
+        #         # deeplab_loss=torch.mean(F.relu(torch.abs(outputs_deeplab - inputs_deeplab)))
+        #         disc_real = self.discriminator(style_images)
+        #         disc_fake = self.discriminator(outputs)
+        #         d_loss_real = torch.mean(F.relu(1. - disc_real))
+        #         d_loss_fake = torch.mean(F.relu(1. + disc_fake))
+        #         gan_loss = (d_loss_real + d_loss_fake)
+        #         # print(outputs.shape)
+        #         # print(samples.shape)
+        #         loss_dict = self.criterion(outputs, samples, style_images)
+        #         weight_dict = self.criterion.weight_dict
+        #         g_loss = -torch.mean(disc_fake)
+        #         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if
+        #                      k in weight_dict) + g_loss \
+        #                  #+ 0.01*deeplab_loss \
+        #         #+ args.id1_loss * loss_id_1
+        #
+        #         # reduce losses over all GPUs for logging purposes
+        #         loss_dict_reduced = util.misc.reduce_dict(loss_dict)
+        #         loss_dict_reduced_unscaled = {f'{k}_unscaled': v
+        #                                       for k, v in loss_dict_reduced.items()}
+        #         loss_dict_reduced_scaled = {k: v * weight_dict[k]
+        #                                     for k, v in loss_dict_reduced.items() if k in weight_dict}
+        #         losses_reduced_scaled = sum(loss_dict_reduced_scaled.values())
+        #
+        #         loss_value = losses_reduced_scaled.item()
+        #         self.opt_t.zero_grad()
+        #         losses.backward(retain_graph=True)
+        #         self.opt_disc.zero_grad()
+        #         gan_loss.backward()
+        #         self.opt_t.step()
+        #         self.opt_disc.step()
+        #
+        #         metric_logger.update(loss=loss_value,
+        #                              **loss_dict_reduced_scaled,
+        #                              **loss_dict_reduced_unscaled)
+        #         if it % 200 == 0:
+        #             with torch.no_grad():
+        #                 real_fake_images = torch.cat((samples[:4].add(1).mul(0.5)[:4], outputs.add(1).mul(0.5)[:4],
+        #                                               style_images.add(1).mul(0.5)[:4]))
+        #                 vutils.save_image(real_fake_images, os.path.join("results", f"1_{it}_src2.jpg"), nrow=4)
+        #     if epoch % 10 == 0:
+        #         torch.save(self.transformer.state_dict(),
+        #                os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
         getTest(train_loader_s, train_loader_t, args)
 
     def mse_loss(self, outputs_cc, samples):
@@ -151,7 +235,8 @@ class TrainT:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
     parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z (default: 256)')
-    parser.add_argument('--image-size', type=int, default=128, help='Image height and width (default: 256)')
+    parser.add_argument('--image-size', type=int, default=512, help='Image height and width (default: 256)')
+    parser.add_argument('--img-size', type=int, default=512, help='Image height and width (default: 256)')
     parser.add_argument('--patch-size', type=int, default=4, help='Patch height and width (default: 256)')
     parser.add_argument('--num-codebook-vectors', type=int, default=1024,
                         help='Number of codebook vectors (default: 256)')
@@ -160,7 +245,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
     parser.add_argument('--device', type=str, default="cuda:1", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -191,7 +276,6 @@ if __name__ == '__main__':
                         help="Size of fold kernels")
     parser.add_argument('--fold_stride', default=6, type=int,
                         help="Size of fold kernels")
-    parser.add_argument('--img_size', default=256, type=int)
     parser.add_argument('--enorm', action='store_true')
     parser.add_argument('--dnorm', action='store_true')
     parser.add_argument('--tnorm', action='store_true')
@@ -222,9 +306,10 @@ if __name__ == '__main__':
     # args.dataset_path_t = [r"/home/zhang/PycharmProjects/B"]
     # args.dataset_path_s = [r"/home/zhang/PycharmProjects/input/style"]
     # args.dataset_path_t = [r"/home/zhang/PycharmProjects/input/content"]
+    args.in_content_folder= "/media/lab/sdb/zzc/zhangdaqian"
+    args.style_folder="/media/lab/sdb/zzc/myVQGAN/output/style_images_fix"
+    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_190.pt"
 
-    #args.checkpoint_path_style = r"/home/zhang/PycharmProjects/VQGAN-pytorch/checkpoints/transformer_epoch_90.pt"
-    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_90.pt"
-    args.checkpoint_vggans=r"/media/lab/sdb/zzc/myVQGAN1/checkpoints/vqganB_epoch_99.pt"
+    args.checkpoint_vggans = r"/media/lab/sdb/zzc/myVQGAN1/checkpoints/vqganB_epoch_299.pt"
     # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_90.pt"
     train_t = TrainT(args)

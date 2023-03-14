@@ -28,7 +28,10 @@ def getTest(test_dataset_s,test_dataset_t,args):
         for i, samples, style_images in zip(pbar,test_dataset_t, test_dataset_s):
             samples = samples.to(device=args.device)
             style_images = style_images.to(device=args.device)
-            outputs = transformer.log_images(samples, style_images)
+            outputs = transformer.log_images(style_images,samples)
+            samples=samples[:4].add(1).mul(0.5)[:4]
+            outputs=outputs.add(1).mul(0.5)[:4]
+            style_images=style_images.add(1).mul(0.5)[:4]
             with torch.no_grad():
                 vutils.save_image(outputs, os.path.join("output/outputs_fix", f"{i}.jpg"))
                 vutils.save_image(style_images, os.path.join("output/style_images_fix", f"{i}.jpg"))

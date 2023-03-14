@@ -15,6 +15,7 @@ class Transformerr(nn.Module):
         #self.vqgan_t,self.vqgan_s = self.load_vqgan(args)
         self.vqgan_t=VQGAN(args).to(device=args.device)
         self.vqgan_s=VQGAN(args).to(device=args.device)
+        self.vqgan_s.load_checkpoint(args.checkpoint_vggans)
         self.img_size = to_2tuple(args.image_size)
         self.patch_size = to_2tuple(args.patch_size)
         self.patches_resolution = (self.img_size[0] // self.patch_size[0], self.img_size[1] // self.patch_size[1])
@@ -60,13 +61,14 @@ class Transformerr(nn.Module):
         quant_conv_encoded_images_t = self.vqgan_t.quant_conv(encoded_image_t)
         codebook_mapping_s, codebook_indices_s, q_loss_s = self.vqgan_s.codebook(quant_conv_encoded_images_s)
         #codebook_mapping_t, codebook_indices_t, q_loss_t = self.vqgan_t.codebook(quant_conv_encoded_images_t)
-        codebook_mapping_s=self.vqgan_s.post_quant_conv(codebook_mapping_s)
+        #codebook_mapping_s=self.vqgan_s.post_quant_conv(codebook_mapping_s)
         #codebook_mapping_t = self.vqgan_t.post_quant_conv(codebook_mapping_t)
         # pca_s=torch.flatten(codebook_mapping_s,2)
         # self.pca.fit(pca_s)
         # trans_X = self.pca.transform(pca_s)
         # pca_loss = self.torch_cov(trans_X)
         codebook_mapping_t=quant_conv_encoded_images_t
+        #codebook_mapping_s = quant_conv_encoded_images_s
         #print(codebook_mapping_s.shape)
         b, c, h, w = codebook_mapping_s.shape
         #print(encoded_image_s.shape)
@@ -97,7 +99,7 @@ class Transformerr(nn.Module):
         res = self.tail(res)  # [B,3,H,W]
         #print(res.shape)
 
-        return res,q_loss_s
+        return res
     def load_checkpoint(self, path):
         self.load_state_dict(torch.load(path))
 
