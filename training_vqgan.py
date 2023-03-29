@@ -68,10 +68,10 @@ class TrainVQGAN:
                     perceptual_rec_loss = perceptual_rec_loss.mean()
                     g_loss = -torch.mean(disc_fake)
 
-                    fcn_loss=self.fcn(imgs, decoded_images)
+                    #fcn_loss=self.fcn(imgs, decoded_images)
 
                     #λ = self.vqgan.calculate_lambda(perceptual_rec_loss, g_loss)
-                    vq_loss = perceptual_rec_loss + q_loss +  g_loss + 0.001*fcn_loss
+                    vq_loss = perceptual_rec_loss + q_loss + g_loss
 
                     d_loss_real = torch.mean(F.relu(1. - disc_real))
                     d_loss_fake = torch.mean(F.relu(1. + disc_fake))
@@ -86,17 +86,18 @@ class TrainVQGAN:
                     self.opt_vq.step()
                     self.opt_disc.step()
 
-                    if i % 10 == 0:
+                    if i % 40000 == 0:
                         with torch.no_grad():
                             real_fake_images = torch.cat((imgs[:4].add(1).mul(0.5)[:4], decoded_images.add(1).mul(0.5)[:4]))
-                            vutils.save_image(real_fake_images, os.path.join("results", f"B_{epoch}_{i}.jpg"), nrow=4)
+                            vutils.save_image(real_fake_images, os.path.join("results/vq", f"B_{epoch}_{i}.jpg"), nrow=4)
 
                     pbar.set_postfix(
                         VQ_Loss=np.round(vq_loss.cpu().detach().numpy().item(), 5),
                         GAN_Loss=np.round(gan_loss.cpu().detach().numpy().item(), 3)
                     )
                     pbar.update(0)
-                torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", f"vqganB_epoch_{epoch}.pt"))
+                if epoch%10==0:
+                    torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", f"vqganB_epoch_{epoch}.pt"))
 
 
 if __name__ == '__main__':
@@ -107,9 +108,9 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
-    parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
+    parser.add_argument('--device', type=str, default="cuda:1", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=20, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -120,7 +121,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     #args.dataset_path = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
-    args.dataset_path = [ r"/media/lab/sdb/zzc/B"]
+    args.dataset_path = [ r"/media/lab/sdb/zzc/input/content"]
     train_vqgan = TrainVQGAN(args)
 
 

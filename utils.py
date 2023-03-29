@@ -75,6 +75,12 @@ def load_data_3(args):
     train_data_t = ImagePaths(args.dataset_path_t, size=256)
     train_loader_t = DataLoader(train_data_t, batch_size=args.batch_size, shuffle=False)
     return train_loader_s, train_loader_t
+def load_data_test(args):
+    train_data_s = ImagePaths(args.dataset_path_s_test, size=256)
+    train_loader_s = DataLoader(train_data_s, batch_size=args.batch_size, shuffle=False)
+    train_data_t = ImagePaths(args.dataset_path_t_test, size=256)
+    train_loader_t = DataLoader(train_data_t, batch_size=args.batch_size, shuffle=False)
+    return train_loader_s, train_loader_t
 def load_data_4(args):
     dataset_val = build_dataset('val', args)
     #sampler_val = DistributedSampler(dataset_val, shuffle=False)
