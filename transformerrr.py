@@ -7,6 +7,7 @@ from transformer_nonorm_flx import Transformer
 from util.misc import nested_tensor_from_tensor_list, NestedTensor
 from vqgan import VQGAN
 from decoder import Decoder
+from encoder import EncoderEdge
 from torchvision.models._utils import IntermediateLayerGetter
 from position_encoding import build_position_encoding_ours
 class Transformerr(nn.Module):
@@ -15,7 +16,7 @@ class Transformerr(nn.Module):
         #self.vqgan_t,self.vqgan_s = self.load_vqgan(args)
         self.vqgan_t=VQGAN(args).to(device=args.device)
         self.vqgan_s=VQGAN(args).to(device=args.device)
-        #self.vqgan_edge = VQGAN(args).to(device=args.device)
+        self.vqgan_edge = EncoderEdge(args).to(device=args.device)
         self.vqgan_s.load_checkpoint(args.checkpoint_vggans_S)
         self.vqgan_t.load_checkpoint(args.checkpoint_vggans_C)
         self.vqgan_s.eval()
@@ -38,6 +39,7 @@ class Transformerr(nn.Module):
             input_resolution=self.patches_resolution
         )
         hidden_dim = self.transformer.d_model
+        self.add_edge = nn.Conv2d(hidden_dim*2, args.hidden_dim, kernel_size=1)
         self.output_proj = nn.Conv2d(hidden_dim, args.latent_dim, kernel_size=1)
         self.position_embedding = build_position_encoding_ours(args)
         # tail_layers = []
@@ -57,10 +59,11 @@ class Transformerr(nn.Module):
         self.input_proj_c = nn.Conv2d(args.latent_dim, hidden_dim, kernel_size=1)
         self.input_proj_s = nn.Conv2d(args.latent_dim, hidden_dim, kernel_size=1)
         self.device=args.device
-    def forward(self,simg,timg):
+    def forward(self,simg,timg,edge):
 
         encoded_image_s = self.vqgan_s.encoder(simg)
         encoded_image_t=self.vqgan_t.encoder(timg)
+        encoded_image_edge=self.vqgan_edge(edge)
         #quant_conv_encoded_images_s = self.vqgan_s.quant_conv(encoded_image_s)
         quant_conv_encoded_images_t = self.vqgan_t.quant_conv(encoded_image_t)
         #codebook_mapping_s, codebook_indices_s, q_loss_s = self.vqgan_s.codebook(quant_conv_encoded_images_s)
@@ -73,6 +76,8 @@ class Transformerr(nn.Module):
         # pca_loss = self.torch_cov(trans_X)
         #codebook_mapping_t=quant_conv_encoded_images_t
         #codebook_mapping_s = quant_conv_encoded_images_s
+        codebook_mapping_t=torch.cat([codebook_mapping_t,encoded_image_edge],dim=1)
+        codebook_mapping_t=self.add_edge(codebook_mapping_t)
         codebook_mapping_s = encoded_image_s
         #print(codebook_mapping_s.shape)
         b, c, h, w = codebook_mapping_s.shape
@@ -114,14 +119,15 @@ class Transformerr(nn.Module):
         return cov_matrix
 
     @torch.no_grad()
-    def log_images(self,simg,timg):
+    def log_images(self,simg,timg,edge):
         encoded_image_s = self.vqgan_s.encoder(simg)
         encoded_image_t = self.vqgan_t.encoder(timg)
-        quant_conv_encoded_images_s = self.vqgan_s.quant_conv(encoded_image_s)
+        encoded_image_edge = self.vqgan_edge(edge)
+        # quant_conv_encoded_images_s = self.vqgan_s.quant_conv(encoded_image_s)
         quant_conv_encoded_images_t = self.vqgan_t.quant_conv(encoded_image_t)
-        codebook_mapping_s, codebook_indices_s, q_loss_s = self.vqgan_s.codebook(quant_conv_encoded_images_s)
+        # codebook_mapping_s, codebook_indices_s, q_loss_s = self.vqgan_s.codebook(quant_conv_encoded_images_s)
         codebook_mapping_t, codebook_indices_t, q_loss_t = self.vqgan_t.codebook(quant_conv_encoded_images_t)
-        codebook_mapping_s = self.vqgan_s.post_quant_conv(codebook_mapping_s)
+        # codebook_mapping_s = self.vqgan_s.post_quant_conv(codebook_mapping_s)
         codebook_mapping_t = self.vqgan_t.post_quant_conv(codebook_mapping_t)
         # pca_s=torch.flatten(codebook_mapping_s,2)
         # self.pca.fit(pca_s)
@@ -129,6 +135,9 @@ class Transformerr(nn.Module):
         # pca_loss = self.torch_cov(trans_X)
         # codebook_mapping_t=quant_conv_encoded_images_t
         # codebook_mapping_s = quant_conv_encoded_images_s
+        codebook_mapping_t = torch.cat([codebook_mapping_t, encoded_image_edge], dim=1)
+        codebook_mapping_t = self.add_edge(codebook_mapping_t)
+        codebook_mapping_s = encoded_image_s
         # print(codebook_mapping_s.shape)
         b, c, h, w = codebook_mapping_s.shape
         # print(encoded_image_s.shape)

@@ -15,6 +15,7 @@ from discriminator import Discriminator
 from lpips import LPIPS
 from test_image import getTest
 from transformerr import Transformerr
+#from transformerrr import Transformerr
 from vqgan import VQGAN
 from utils import load_data, weights_init
 from fcn import FCN
@@ -30,16 +31,16 @@ class TrainT:
                        'loss_tv': args.tv_loss_coef}
         losses = ['content', 'style', 'tv']
         self.transformer = Transformerr(args).to(device=args.device)
-
+        self.transformer.load_checkpoint(args.checkpoint_path_transformer)
         self.criterion = SetCriterion(1, weight_dict=weight_dict,
                                       eos_coef=args.eos_coef, losses=losses)
         self.criterion.to(device=args.device)
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
         self.opt_t, self.opt_disc = self.configure_optimizers(args)
-        self.deeplabv3 = DeepLabV3("eval_seq_thn", project_dir="/media/lab/sdb/zzc/deeplabv3").cuda()
+        self.deeplabv3 = DeepLabV3("eval_seq_thn", project_dir="/media/lab/sdb/zzc/deeplabv3").cuda(1)
         self.deeplabv3.load_state_dict(
-            torch.load("/media/lab/sdb/zzc/myVQGAN/deeplabv3/pretrained_models/model_13_2_2_2_epoch_580.pth"))
+            torch.load("/media/lab/sdb/zzc/myVQGAN/deeplabv3/pretrained_models/model_13_2_2_2_epoch_580.pth",map_location=args.device))
         self.deeplabv3.eval()
         self.prepare_training()
 
@@ -52,11 +53,11 @@ class TrainT:
             list(self.transformer.transformer.parameters()) +
             list(self.transformer.tail.parameters()) +
             list(self.transformer.output_proj.parameters()) +
-            list(self.transformer.vqgan_t.encoder.parameters()) +
+            #list(self.transformer.vqgan_t.encoder.parameters()) +
             #list(self.transformer.vqgan_s.encoder.parameters()) +
             # list(self.transformer.vqgan_t.codebook.parameters()) +
             #list(self.transformer.vqgan_s.codebook.parameters()) +
-            list(self.transformer.vqgan_t.quant_conv.parameters()) +
+            #list(self.transformer.vqgan_t.quant_conv.parameters()) +
             #list(self.transformer.vqgan_s.quant_conv.parameters()) +
             list(self.transformer.input_proj_c.parameters()) +
             list(self.transformer.input_proj_s.parameters())
@@ -78,16 +79,17 @@ class TrainT:
     def train(self, args):
         # train_loader_s, train_loader_t, test_dataset_s, test_dataset_t = utils.load_data_2(args)
         train_loader_s, train_loader_t = utils.load_data_3(args)
-        # dataset_train = build_dataset(image_set='train', args=args)
-        # dataset_val = build_dataset(image_set='val', args=args)
-        # sampler_train = torch.utils.data.RandomSampler(dataset_train)
-        # sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-        # batch_sampler_train = torch.utils.data.BatchSampler(
-        #     sampler_train, args.batch_size, drop_last=True)
-        # data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
-        #                                collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
-        # data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
-        #                              drop_last=False, collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
+        train_loader_s_test, train_loader_t_test= utils.load_data_test(args)
+        # # dataset_train = build_dataset(image_set='train', args=args)
+        # # dataset_val = build_dataset(image_set='val', args=args)
+        # # sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        # # sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        # # batch_sampler_train = torch.utils.data.BatchSampler(
+        # #     sampler_train, args.batch_size, drop_last=True)
+        # # data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
+        # #                                collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
+        # # data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
+        # #                              drop_last=False, collate_fn=utils.collate_fn_st, num_workers=args.num_workers)
         for epoch in range(args.epochs):
             with tqdm(range(len(train_loader_t))) as pbar:
                 for i, samples, style_images in zip(pbar, train_loader_t, train_loader_s):
@@ -97,15 +99,20 @@ class TrainT:
                     samples = samples.to(device=args.device)
                     style_images = style_images.to(device=args.device)
                     #samples=style_images
-                    outputs = self.transformer(samples, style_images)
+                    # inputs_deeplab = self.deeplabv3(samples)
+                    # print(inputs_deeplab.shape)
+                    # inputs_deeplab = inputs_deeplab.data.cpu().numpy()  # (shape: (batch_size, num_classes, img_h, img_w))
+                    # pred_label_imgs = np.argmax(inputs_deeplab, axis=1)  # (shape: (batch_size, img_h, img_w))
+                    # pred_label_imgs = torch.from_numpy(pred_label_imgs)  # 将numpy 转换化为 tensor
+                    outputs = self.transformer(style_images,samples)
                     #outputs_cc = self.transformer(samples, samples)
                     #outputs_ss = self.transformer(style_images, style_images)
                     #loss_id_1 = self.mse_loss(outputs_cc, samples) \
                                 #+ self.mse_loss(outputs_ss, style_images)
                     # print(samples.shape)
                     # print(outputs.shape)
-                    # outputs_deeplab = self.deeplabv3(outputs)
-                    # inputs_deeplab = self.deeplabv3(samples)
+                    #outputs_deeplab = self.deeplabv3(outputs)
+
                     # deeplab_loss=torch.mean(F.relu(torch.abs(outputs_deeplab - inputs_deeplab)))
                     disc_real = self.discriminator(style_images)
                     disc_fake = self.discriminator(outputs)
@@ -138,19 +145,21 @@ class TrainT:
                     self.opt_t.step()
                     self.opt_disc.step()
 
-                    if i % 50 == 0:
+                    if i % 1000 == 0:
                         with torch.no_grad():
                             real_fake_images = torch.cat((samples[:4].add(1).mul(0.5)[:4], outputs.add(1).mul(0.5)[:4],
                                                           style_images.add(1).mul(0.5)[:4]))
-                            vutils.save_image(real_fake_images, os.path.join("results", f"1_{epoch}_{i}_src2.jpg"), nrow=4)
+                            vutils.save_image(real_fake_images, os.path.join("results_0.9", f"1_{epoch}_{i}_src2.jpg"), nrow=4)
+                            getTest(train_loader_s_test,train_loader_t_test,args,self.transformer)
 
                     pbar.set_postfix(
                         t_Loss=np.round(loss_value, 5)
                     )
                     pbar.update(0)
-                if epoch % 10 == 0:
-                    torch.save(self.transformer.state_dict(),
-                               os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
+
+                torch.save(self.transformer.state_dict(),
+                           os.path.join("checkpoints", f"transformer_epoch_{epoch}_0.9.pt"))
+
         # getTest(test_dataset_s,test_dataset_t,args)
         # data_loader = utils.load_data_4(args)
         # metric_logger = util.misc.MetricLogger(delimiter="  ")
@@ -226,7 +235,7 @@ class TrainT:
         #     if epoch % 10 == 0:
         #         torch.save(self.transformer.state_dict(),
         #                os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
-        getTest(train_loader_s, train_loader_t, args)
+        #getTest(train_loader_s_test, train_loader_t_test, args)
 
     def mse_loss(self, outputs_cc, samples):
         return torch.nn.MSELoss()(outputs_cc,samples)
@@ -245,7 +254,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
     parser.add_argument('--device', type=str, default="cuda:1", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train (default: 50)')
+    parser.add_argument('--epochs', type=int, default=6, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
@@ -286,8 +295,8 @@ if __name__ == '__main__':
                         help="")
     # * Loss coefficients
 
-    parser.add_argument('--content_loss_coef', default=1.0, type=float)
-    parser.add_argument('--style_loss_coef', default=1.0, type=float)
+    parser.add_argument('--content_loss_coef', default=0.1, type=float)
+    parser.add_argument('--style_loss_coef', default=0.9, type=float)
     parser.add_argument('--tv_loss_coef', default=0, type=float)
     parser.add_argument('--id1_loss', default=10, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
@@ -300,16 +309,19 @@ if __name__ == '__main__':
                         help="Type of positional embedding to use on top of the image features")
 
     args = parser.parse_args()
-    args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
-    args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
+    #args.dataset_path_s = [r"/media/lab/sdb/zzc/zhangdaqian",r"/media/lab/sdb/zzc/A"]
+    #args.dataset_path_t = [r"/media/lab/sdb/zzc/B"]
     # args.dataset_path_s = [r"/home/zhang/PycharmProjects/zhangdaqian", r"/home/zhang/PycharmProjects/A"]
     # args.dataset_path_t = [r"/home/zhang/PycharmProjects/B"]
-    # args.dataset_path_s = [r"/home/zhang/PycharmProjects/input/style"]
-    # args.dataset_path_t = [r"/home/zhang/PycharmProjects/input/content"]
-    args.in_content_folder= "/media/lab/sdb/zzc/zhangdaqian"
-    args.style_folder="/media/lab/sdb/zzc/myVQGAN/output/style_images_fix"
-    args.checkpoint_path_style = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_190.pt"
+    args.dataset_path_s = [r"/media/lab/sdb/zzc/input/style"]
+    args.dataset_path_t = [r"/media/lab/sdb/zzc/input/content"]
+    #args.in_content_folder= "/media/lab/sdb/zzc/zhangdaqian"
+    #args.style_folder="/media/lab/sdb/zzc/myVQGAN/output/style_images_fix"
+    args.dataset_path_s_test = [r"/home/lab/Downloads/test1/style"]
+    args.dataset_path_t_test = [r"/home/lab/Downloads/test1/content"]
+    args.checkpoint_path_transformer = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/transformer_epoch_5.pt"
 
-    args.checkpoint_vggans = r"/media/lab/sdb/zzc/myVQGAN1/checkpoints/vqganB_epoch_299.pt"
-    # args.checkpoint_path_ture = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganB_epoch_90.pt"
+    #args.checkpoint_vggans = r"/media/lab/sdb/zzc/myVQGAN1/checkpoints/vqganB_epoch_299.pt"
+    args.checkpoint_vggans_S = r"/media/lab/sdb/zzc/myVQGAN/checkpoints/vqganA_epoch_10.pt"
+    args.checkpoint_vggans_C = r"/media/lab/sdb/zzc/myVQGAN1/checkpoints/vqganB_epoch_10.pt"
     train_t = TrainT(args)
